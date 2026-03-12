@@ -592,6 +592,28 @@ theorem toSkip_start :
     P.toSkip.start.val = P.start :=
   rfl
 
+omit [Fintype P.nodes] in
+lemma evalAt_internal' (x : α → β) (u : P.nodes) (var : α) (next : β → P.nodes)
+    (h : P.info u = .inr (var, next)) :
+    P.evalAt x u = P.evalAt x (next (x var)) := by
+  unfold BranchingProgram.evalAt
+  rw [WellFounded.fix_eq]
+  split <;> simp_all
+  obtain ⟨rfl, rfl⟩ := h
+  rfl
+
+lemma toSkip_edges_val_internal {i : Fin P.depth} (u : P.toSkip.nodes i.castSucc) (b : β)
+    (var : α) (next : β → P.nodes) (hinfo : P.info u.val = .inr (var, next)) :
+    (P.toSkip.edges u b).2.val = next b := by
+  simp only [BranchingProgram.toSkip]
+  split <;> simp_all
+
+lemma toSkip_nodeVar_internal {i : Fin P.depth} (u : P.toSkip.nodes i.castSucc)
+    (var : α) (next : β → P.nodes) (hinfo : P.info u.val = .inr (var, next)) :
+    P.toSkip.nodeVar u = var := by
+  simp only [BranchingProgram.toSkip]
+  split <;> simp_all
+
 theorem toSkip_evalAt
     (x : α → β) (i : Fin P.depth.succ) (u : P.toSkip.nodes i) :
     P.toSkip.evalAt x u = P.evalAt x u.1 := by
@@ -607,7 +629,21 @@ theorem toSkip_evalAt
     rw [ WellFounded.fix_eq ];
     unfold toSkip; aesop;
   · convert ih _ _ _ _ rfl using 1;
-    · sorry
+    · -- Need: P.evalAt x ↑u = P.evalAt x ↑(P.toSkip.edges (⋯ ▸ u) (x (P.toSkip.nodeVar (⋯ ▸ u)))).snd
+      -- Since i ≠ last, u is internal
+      have hi_lt : (i : ℕ) < P.depth := by
+        exact lt_of_le_of_ne (Fin.le_last _) (by simpa [Fin.ext_iff] using h)
+      have h_height_pos : 0 < P.height u.val := by
+        rw [u.2.1]; omega
+      obtain ⟨var, next, hinfo⟩ := P.is_internal_of_height_pos u.val h_height_pos
+      rw [evalAt_internal' P x u.val var next hinfo]
+      congr 1
+      -- Now need: next (x var) = ↑(P.toSkip.edges (⋯ ▸ u) (x (P.toSkip.nodeVar (⋯ ▸ u)))).snd
+      have hi_cast : i = (i.castPred h).castSucc := (Fin.castSucc_castPred i h).symm
+      have hinfo' : P.info ((hi_cast ▸ u : P.toSkip.nodes (i.castPred h).castSucc)).val = .inr (var, next) := by
+        cases hi_cast; exact hinfo
+      rw [toSkip_nodeVar_internal P _ var next hinfo']
+      rw [toSkip_edges_val_internal P _ _ var next hinfo']
     · rw [ ← n ];
       apply Nat.sub_lt_sub_left
       · exact lt_of_le_of_ne ( Fin.le_last _ ) ( by simpa [ Fin.ext_iff ] using h );
