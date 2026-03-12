@@ -353,8 +353,46 @@ theorem thinBP_CorrectState_succ {n} (x : α → β) :
     rw [← Nat.add_one_le_iff] at ha h_cond2
     grw [← h_cond2, ← ha]
     norm_num
-  --Induction
-  sorry
+  -- Extract key values from the IH and goal
+  have hn_val_ne : ¬(n.castSucc : Fin _).val = 0 := by
+    intro heq; apply h; ext; simpa using heq
+  unfold thinBP_CorrectState at ih ⊢
+  rw [dif_neg (show (n.succ : Fin _).val ≠ 0 from by simp)] at ⊢
+  rw [dif_neg hn_val_ne] at ih
+  -- Key abbreviations
+  set a := Fintype.card α
+  set b := Fintype.card β
+  set c := Fintype.card γ
+  haveI : NeZero c := ⟨(Fintype.card_pos_iff.mpr ⟨F (fun _ ↦ Classical.arbitrary β)⟩).ne'⟩
+  -- Key arithmetic
+  set k_old := (n : ℕ) / a
+  set pos_old := (n : ℕ) % a
+  set k_new := ((n : ℕ) + 1) / a
+  set pos_new := ((n : ℕ) + 1) % a
+  -- n.val < depth = a * b^a, so k_old < b^a
+  have hn_lt : (n : ℕ) < a * b ^ a := by
+    have := n.isLt; change (n : ℕ) < (thinBP F).depth at this
+    simp only [thinBP_depth] at this; exact this
+  have hk_old_bound : k_old < b ^ a := Nat.div_lt_of_lt_mul hn_lt
+  -- Case split: boundary or not
+  -- Helper: Nat.div_add_mod gives a * (n/a) + n%a = n
+  have h_dam : a * k_old + pos_old = (n : ℕ) := by
+    have := Nat.div_add_mod (n : ℕ) a; simp only [k_old, pos_old]; linarith
+  by_cases h_boundary : pos_old = a - 1
+  · -- Boundary case: k_new = k_old + 1, pos_new = 0
+    have hk_new : k_new = k_old + 1 := by
+      have h_eq : (n : ℕ) + 1 = a * (k_old + 1) := by
+        have : pos_old + 1 = a := by omega
+        linarith [mul_add a k_old 1]
+      simp only [k_new]; rw [h_eq]; exact Nat.mul_div_cancel_left _ ha
+    have hpos_new : pos_new = 0 := by
+      have h_eq : (n : ℕ) + 1 = a * (k_old + 1) := by
+        have : pos_old + 1 = a := by omega
+        linarith [mul_add a k_old 1]
+      simp only [pos_new]; rw [h_eq]
+      exact Nat.mul_mod_right a (k_old + 1)
+    sorry
+  · sorry
 
 theorem thinBP_computes : (thinBP F).computes F := by
   intro x
