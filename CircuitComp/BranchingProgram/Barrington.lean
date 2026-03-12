@@ -282,8 +282,8 @@ theorem NC_gates_cases (op : GateOp (Fin 2)) (h : op ∈ NC_GateOps) :
     op.isAND ∨ op.isNOT ∨ op.isID ∨ op.isConst 1 := by
   revert h
   simp [NC_GateOps]
-  rintro (rfl | rfl | rfl | rfl) <;> simp +decide [GateOp.isAND, GateOp.isNOT, GateOp.isID, GateOp.isConst];
-  exact Fin.isEmpty'
+  rintro (rfl | rfl | rfl | rfl)
+  <;> simp +decide [GateOp.isAND, GateOp.isNOT, GateOp.isID, GateOp.isConst, Fin.isEmpty']
 
 /--
 The recursive step for constructing a group program from a circuit layer.
@@ -496,8 +496,7 @@ theorem GP_of_FeedForward_layer_computes_AND {n : ℕ} (hn : n > 0) {nodes_d nod
   have h_apply_def : ∀ {w : Equiv.Perm (Fin 5)}, w.IsCycle ∧ w.support.card = 5 → (GP_of_FeedForward_layer hn gates prev_GPs u w).computes (fun x => (gates u).eval (fun v => input_vals v x)) w := by
     intros w hw
     unfold GP_of_FeedForward_layer;
-    simp_all +decide only;
-    split_ifs ; simp_all +decide only [Gate_eval_of_isAND];
+    simp_all only [dite_true, true_and, Gate_eval_of_isAND]
     · apply_rules [ commutator_computes_AND_of_cycle_decomp ];
       · have := Classical.choose_spec ( exists_commutator_eq_cycle w hw );
         exact this.choose_spec.2.2.2.2;
@@ -506,7 +505,6 @@ theorem GP_of_FeedForward_layer_computes_AND {n : ℕ} (hn : n > 0) {nodes_d nod
           exact Classical.choose_spec ( exists_commutator_eq_cycle w hw ) |> Classical.choose_spec |> And.right |> And.right |> And.right |> And.left ⟩;
       · apply_rules [ inv_is_five_cycle ];
         exact Classical.choose_spec ( exists_commutator_eq_cycle w hw ) |> Classical.choose_spec |> fun h => ⟨ h.1, h.2.1 ⟩;
-    · contradiction;
   exact h_apply_def hσ
 
 /-
@@ -587,7 +585,8 @@ def sigma_five_cycle : Equiv.Perm (Fin 5) :=
   finRotate 5
 
 lemma sigma_five_cycle_is_cycle : sigma_five_cycle.IsCycle ∧ sigma_five_cycle.support.card = 5 := by
-  simp +decide [Equiv.Perm.IsCycle]
+  rw [Equiv.Perm.IsCycle]
+  decide
 
 lemma sigma_five_cycle_zero_ne_zero : sigma_five_cycle 0 ≠ 0 := by
   decide
@@ -1056,12 +1055,12 @@ Proof uses the fact that the index bound implies the start of the right child (w
 lemma BP_to_Circuit_interval_end_eq_left_end_of_right_invalid {n : ℕ} {BP : LayeredBranchingProgram (Fin n) (Fin 2) (Fin 2)}
     {t j : ℕ} (h : ¬ (2 * j + 1 < ⌈(BP.depth : ℚ) / 2^t⌉₊)) :
     (BP_to_Circuit_interval BP (t + 1) j).2 = (BP_to_Circuit_interval BP t (2 * j)).2 := by
-      have := @BP_to_Circuit_interval_end_eq_right_end;
-      convert this using 1;
-      simp [ BP_to_Circuit_interval ];
-      rw [ min_eq_left, min_eq_left ] <;> norm_num [ Nat.mul_succ, pow_succ' ] at *;
-      · rw [ div_le_iff₀ ] at h <;> norm_cast at * <;> linarith [ Nat.one_le_pow t 2 zero_lt_two ];
-      · rw [ div_le_iff₀ ] at h <;> norm_cast at * ; linarith [ Nat.one_le_pow t 2 zero_lt_two ]
+  have := @BP_to_Circuit_interval_end_eq_right_end;
+  convert this using 1;
+  simp [ BP_to_Circuit_interval ];
+  rw [ min_eq_left, min_eq_left ] <;> norm_num [ Nat.mul_succ, pow_succ' ] at *;
+  · rw [ div_le_iff₀ ] at h <;> norm_cast at * <;> linarith [ Nat.one_le_pow t 2 zero_lt_two ];
+  · rw [ div_le_iff₀ ] at h <;> norm_cast at * ; linarith [ Nat.one_le_pow t 2 zero_lt_two ]
 
 /-
 Define the identity gate construction for the intermediate layers.
@@ -1151,14 +1150,12 @@ def BP_to_Circuit_Gates_last {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (Fi
   { op := FinalOp k ret
     inputs := fun i ↦ equiv i }
 
-/-
+/-- **Conversion of a BranchingProgram to a Circuit**
 Define the full circuit construction from the branching program.
 The circuit has depth `H + 2`.
-Layer 0 gates are `BP_to_Circuit_Gates_0`.
-Layer `H + 1` gates are `BP_to_Circuit_Gates_last`.
+Layer 0 gates are `BP_to_Circuit_Gates_0`. Layer `H + 1` gates are `BP_to_Circuit_Gates_last`.
 Intermediate layers `d` (corresponding to tree level `t = d - 1`) use `BP_to_Circuit_Gates_mid`.
 -/
-open Classical in
 def BP_to_Circuit {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (Fin 2) (Fin 2)) [BP.Finite] :
     FeedForward (Fin 2) (Fin n) (Fin 1) :=
   { depth := BP_to_Circuit_Depth BP
@@ -1290,26 +1287,12 @@ Corrected the proof term for the upper bound of the interval end.
 -/
 lemma BP_to_Circuit_interval_0_lt {n : ℕ} {BP : LayeredBranchingProgram (Fin n) (Fin 2) (Fin 2)}
     {j : Fin ⌈(BP.depth : ℚ) / 2^0⌉₊} (h : j.val < BP.depth) :
-    BP_to_Circuit_interval BP 0 j.val = (⟨j.val, lt_trans h (Nat.lt_succ_self _)⟩, ⟨j.val + 1, Nat.lt_succ_of_le (Nat.succ_le_of_lt h)⟩) := by
-      generalize_proofs at *;
-      (generalize_proofs at *; simp_all [ BP_to_Circuit_interval ];);
-      exact ⟨ Nat.le_of_lt h, Nat.le_of_lt_succ ‹_› ⟩
+  BP_to_Circuit_interval BP 0 j.val = (⟨j.val, lt_trans h (Nat.lt_succ_self _)⟩, ⟨j.val + 1, Nat.lt_succ_of_le (Nat.succ_le_of_lt h)⟩) := by
+    simp_all [ BP_to_Circuit_interval ];
+    exact ⟨ Nat.le_of_lt h, by omega⟩
 
 /-
-PROBLEM
 Helper: BP_evalSegment starting from evalLayer i gives evalLayer j.
-PROVIDED SOLUTION
-By strong induction on `j.val - i.val` (which is the termination measure of BP_evalSegment).
-Base case (j.val - i.val = 0, i.e., i = j): BP_evalSegment returns `cast rfl (evalLayer i x) = evalLayer i x = evalLayer j x`. Use BP_evalSegment_refl and the fact that i = j.
-Inductive step (j.val - i.val = k+1): Since i ≠ j, BP_evalSegment unfolds: it takes one step from layer i to i+1, computing `next_u = edges (cast ... (evalLayer i x)) (x (nodeVar (cast ... (evalLayer i x))))`. The cast is just identity (nodes i.castSucc = nodes i for appropriate casting). Then it recurses with evalSegment from i+1 to j starting at next_u.
-Now, `evalLayer (i+1) x = edges (evalLayer i.castSucc x) (x (nodeVar (evalLayer i.castSucc x)))` by evalLayer_succ. Since i' = ⟨i.val, ...⟩ and i'.castSucc has the same value as i, the cast is an identity and next_u = evalLayer (i+1) x.
-By IH (since j.val - (i+1).val < j.val - i.val), evalSegment from i+1 to j starting at evalLayer (i+1) x = evalLayer j x.
-Key steps:
-1. Unfold BP_evalSegment (the i ≠ j case)
-2. Show that the cast of evalLayer i x to the castSucc type is evalLayer i.castSucc x (they're the same since i and i.castSucc have the same value)
-3. Show next_u = evalLayer i'.succ x by evalLayer_succ
-4. Apply IH
-Use `Nat.strongRecOn` on `j.val - i.val`, or induction on `j` with a generalized hypothesis.
 -/
 lemma BP_evalSegment_evalLayer {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (Fin 2) (Fin 2))
     (x : Fin n → Fin 2) (i j : Fin (BP.depth + 1)) (h : i ≤ j) :
@@ -1317,11 +1300,10 @@ lemma BP_evalSegment_evalLayer {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (
   induction' k : j.val - i.val using Nat.strong_induction_on with k ih generalizing i j;
   unfold BP_evalSegment;
   split_ifs with h_eq
-  all_goals generalize_proofs at *;
-  · grind;
-  · convert ih _ _ _ _ _ rfl using 1
-    generalize_proofs at *;
-    exact lt_of_lt_of_le ( Nat.sub_lt_sub_left ( by aesop ) ( Nat.lt_succ_self _ ) ) ( by aesop )
+  · grind
+  · refine ih _ ?_ _ _ _ rfl
+    exact lt_of_lt_of_le (Nat.sub_lt_sub_left (by omega) (Nat.lt_succ_self _)) ( by aesop )
+
 /-
 Helper: BP_evalSegment from 0 starting at start equals evalLayer.
 -/
@@ -1332,17 +1314,8 @@ lemma BP_evalSegment_eq_evalLayer {n : ℕ} (BP : LayeredBranchingProgram (Fin n
   exact BP_evalSegment_evalLayer BP x 0 j (Fin.zero_le j)
 
 /-
-PROBLEM
 Helper: BP_evalSegment composes. If we evaluate from i to m, then from m to j, it's the same
 as evaluating from i to j.
-PROVIDED SOLUTION
-By strong induction on `m.val - i.val` using Nat.strong_induction_on.
-Base case: when m.val - i.val = 0, we have i = m (since both are Fin values with i ≤ m). The LHS inner evalSegment is BP_evalSegment i i him u, which by BP_evalSegment_refl equals u. So LHS = BP_evalSegment i j hmj u. The RHS is BP_evalSegment i j (le_trans him hmj) u. These are equal since the le proof is irrelevant (the function doesn't depend on the proof term, only on i, j, and u).
-Inductive step: i ≠ m and i ≠ j (since i < m ≤ j). Unfold BP_evalSegment on both the inner call (i to m) and the outer call (i to j). Both take one step from i:
-- Inner: BP_evalSegment i m him u = BP_evalSegment i'.succ m _ (edges (cast ... u) (x (nodeVar (cast ... u))))
-- Outer: BP_evalSegment i j _ u = BP_evalSegment i'.succ j _ (edges (cast ... u) (x (nodeVar (cast ... u))))
-Let next_u = edges (cast ... u) (x (nodeVar (cast ... u))). Now LHS = BP_evalSegment m j hmj (BP_evalSegment i'.succ m _ next_u), and RHS = BP_evalSegment i'.succ j _ next_u. By IH with i := i'.succ (since m.val - i'.succ.val < m.val - i.val), LHS = RHS. Use `convert ih ... using 1` and `congr 1`.
-Key: Use `induction' k : m.val - i.val using Nat.strong_induction_on`, unfold BP_evalSegment at i (both sides), show the steps match, and apply IH.
 -/
 lemma BP_evalSegment_trans {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (Fin 2) (Fin 2))
     (x : Fin n → Fin 2) (i m j : Fin (BP.depth + 1)) (him : i ≤ m) (hmj : m ≤ j)
@@ -1350,54 +1323,39 @@ lemma BP_evalSegment_trans {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (Fin 
     BP_evalSegment BP x m j hmj (BP_evalSegment BP x i m him u) =
     BP_evalSegment BP x i j (le_trans him hmj) u := by
   induction' k : m.val - i.val using Nat.strong_induction_on with k ih generalizing i m j u
-  generalize_proofs at *; (
   by_cases h_cases : i = m ∨ m = j
-  all_goals generalize_proofs at *;
-  · cases h_cases <;> simp_all +decide [ Fin.ext_iff ];
+  · cases h_cases <;> simp_all [ Fin.ext_iff ];
     · congr! 2
-      generalize_proofs at *; (
-      grind);
+      grind
       unfold BP_evalSegment; aesop;
     · -- Since $m = j$, the segment from $m$ to $j$ is just the identity function, so the evaluation at $m$ is the same as the evaluation at $j$.
       have h_eq : m = j := by
         exact Fin.ext ‹_›
-      generalize_proofs at *; (
       have h_evalSegment_refl : ∀ (i : Fin (BP.depth + 1)) (u : BP.nodes i), BP_evalSegment BP x i i (le_refl i) u = u := by
         unfold BP_evalSegment; aesop;
-      generalize_proofs at *; (
       aesop
-      skip));
   · -- Since i ≠ m and m ≠ j, we have i < m and m < j.
     obtain ⟨hi_lt_m, hm_lt_j⟩ : i < m ∧ m < j := by
       exact ⟨ lt_of_le_of_ne him ( by tauto ), lt_of_le_of_ne hmj ( by tauto ) ⟩
-      skip
-    generalize_proofs at *; (
     -- By definition of BP_evalSegment, we can split the evaluation into two parts: from i to m and from m to j.
     have h_split : BP_evalSegment BP x i j (by
     exact le_trans him hmj) u = BP_evalSegment BP x m j hmj (BP_evalSegment BP x i m him u) := by
-      rw [ BP_evalSegment, BP_evalSegment ] ; simp +decide [ hi_lt_m, hm_lt_j, him, hmj ];
-      rw [ BP_evalSegment ] ; simp +decide [ hi_lt_m, hm_lt_j, him, hmj ];
-      split_ifs <;> simp_all +decide [ ne_of_lt ];
+      rw [ BP_evalSegment, BP_evalSegment ] ; simp
+      rw [ BP_evalSegment ] ; simp
+      split_ifs <;> simp_all [ ne_of_lt ];
       · exact False.elim <| lt_asymm hi_lt_m hm_lt_j
-        skip;
       · exact False.elim <| lt_asymm hi_lt_m hm_lt_j;
       · rw [ ← ih _ _ _ _ _ _ _ _ rfl ] <;> norm_num [ hi_lt_m, hm_lt_j, him, hmj ];
         any_goals exact m
-        all_goals generalize_proofs at *;
-        · rw [ BP_evalSegment ] ; simp +decide [ hi_lt_m, hm_lt_j, him, hmj ] at * ; aesop ( simp_config := { singlePass := true } ) ;
+        · rw [ BP_evalSegment ] ; simp [ hi_lt_m, hm_lt_j ] at *
+          aesop (simp_config := { singlePass := true })
         · rw [ ← k ] ; omega;
-        · exact Nat.succ_le_of_lt hi_lt_m;
-        · exact hmj
-    generalize_proofs at *; (
     exact h_split.symm ▸ rfl
-    skip)));
 
-/-
-PROBLEM
+/--
 Helper: BP_evalSegment on an interval of length 0 (i = j) returns the input.
-PROVIDED SOLUTION
-Unfold BP_evalSegment. When i = j, the first branch of the if takes `h_eq : i = j` (here i = j = i), so it returns `cast (by rw [h_eq]) u`. Since h_eq is `rfl`, this is just `u`.
 -/
+@[simp]
 lemma BP_evalSegment_refl {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (Fin 2) (Fin 2))
     (x : Fin n → Fin 2) (i : Fin (BP.depth + 1)) (u : BP.nodes i) :
     BP_evalSegment BP x i i (le_refl i) u = u := by
