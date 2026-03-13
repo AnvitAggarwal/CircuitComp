@@ -321,7 +321,7 @@ be made 1 without much difficulty, by increasing depth), but the count of nodes 
 that layer by - this reflects the notion of width most naturally corresponding to
 `LayeredBranchingProgram.width`, and is the quantity preserved by `SkipBranchingProgram.toLayered`. -/
 def width : ℕ :=
-  ⨆ i : Fin (P.depth + 1), Nat.card (P.ActiveNodes i)
+  ⨆ i : Fin (P.depth + 1), Nat.card (P.nodes i) + Nat.card (P.ActiveNodes i)
 
 end SkipBranchingProgram
 

@@ -16,11 +16,23 @@ namespace SkipBranchingProgram
 
 variable {α : Type u} {β : Type v} {γ : Type w} [Fintype α] (P : SkipBranchingProgram α β γ)
 
+omit [Fintype α] in
 theorem toLayered_width [P.Finite] : P.toLayered.width = P.width := by
-  admit
+  simp only [ActiveNodes, ← Nat.card_sum, toLayered,
+    SkipBranchingProgram.width, LayeredBranchingProgram.width]
 
+omit [Fintype α] in
 theorem toLayered_IsOblivious (h : P.IsOblivious) : P.toLayered.IsOblivious := by
-  admit
+  intro i j k
+  rcases j with (j | ⟨j, hj⟩) <;> rcases k with (k | ⟨k, hk⟩)
+  · exact h i j k
+  · simp only [toLayered]
+    rw [dif_pos ⟨j⟩]
+    exact h i j _
+  · simp only [toLayered]
+    rw [dif_pos ⟨k⟩]
+    exact h i _ k
+  · rfl
 
 namespace toOblivious
 
@@ -115,29 +127,17 @@ def obliviousEdge (t : Fin (P.depth * Fintype.card α))
              simp [Fin.le_iff_val_le_val, * ]
              grind⟩
 
-/-
-PROBLEM
-The edge target is strictly above the source layer.
-PROVIDED SOLUTION
-Unfold `obliviousEdge` and examine both branches of `by_cases hvar`. In the match case (hvar is true), the target is `m * k` where `m` is from `P.edges u' b`, and `P.edges_layer_gt` gives `i.castSucc < m`, so `i * k + k ≤ m * k` while `t = i * k + j ≤ i * k + (k-1) < m * k`. In the pass-through case (hvar is false), the target is `t + 1 > t`.
--/
+/-- The edge target is strictly above the source layer. -/
 lemma obliviousEdge_fst_gt (t : Fin (P.depth * Fintype.card α))
     (u : ObliviousNodes P t.castSucc) (b : β) :
     t.castSucc < (obliviousEdge P t u b).1 := by
     -- By definition of `obliviousEdge`, the first component of the edge is either `m * k` or `t + 1`, both of which are greater than `t`.
   simp [obliviousEdge];
   split_ifs <;> norm_num [ Fin.lt_iff_val_lt_val ] at *;
-  have := P.edges_layer_gt ( cast ( obliviousNodes_unfold P t.castSucc t.2 ( Nat.pos_of_mul_pos_left ( Fin.pos t ) ) ) u |>.1 ) b; simp_all +decide [ Fin.lt_iff_val_lt_val ] ;
+  have := P.edges_layer_gt ( cast ( obliviousNodes_unfold P t.castSucc t.2 ( Nat.pos_of_mul_pos_left ( Fin.pos t ) ) ) u |>.1 ) b; simp_all [ Fin.lt_iff_val_lt_val ] ;
   nlinarith [ Nat.div_add_mod t ( Fintype.card α ), Nat.mod_lt t ( Nat.pos_of_mul_pos_left ( Fin.pos t ) ) ]
 
-/-
-PROBLEM
-The type `ObliviousNodes P 0` is a `Unique` type, inheriting from `P.startUnique`.
-PROVIDED SOLUTION
-Split on whether 0 < P.depth * Fintype.card α using by_cases. Case 1 (h : 0 < P.depth * Fintype.card α): After simp [ObliviousNodes, dif_pos h], the type becomes { w : P.nodes ⟨0, _⟩.castSucc // ... ≥ ⟨0, _⟩ } which is a subtype of P.nodes 0 with a trivially true condition. Since P.nodes 0 is Unique (from P.startUnique), every element has the form ⟨P.start, _⟩. Construct the Unique instance with default ⟨cast _ P.start, _⟩ and uniq using Subtype.ext and P.startUnique.uniq.  Case 2 (h : ¬ 0 < P.depth * Fintype.card α): After simp [ObliviousNodes, dif_neg h], the type is P.nodes (Fin.last P.depth). Since depth = 0 (from the condition), Fin.last 0 = 0, so this is P.nodes 0, which is Unique by P.startUnique.
-Unfold ObliviousNodes. Use by_cases on (0 : ℕ) < P.depth * Fintype.card α. In the true case, simp [ObliviousNodes, dif_pos] to get { w : P.nodes 0 // E (nodeVar w) ≥ 0 }. The ≥ 0 condition is trivially true for all w. Since P.nodes 0 is Unique via P.startUnique, construct the Unique instance for the subtype: default is ⟨P.start, trivial⟩ and uniq uses Subtype.ext with P.startUnique.uniq. In the false case, depth = 0, so ObliviousNodes is P.nodes (Fin.last 0) = P.nodes 0, and use P.startUnique directly (possibly with a cast).
-Use `simp only [ObliviousNodes]` then `split_ifs with h`. In the positive case (h : 0 < P.depth * Fintype.card α), the type becomes `{ u // ... ≥ ⟨0 % k, _⟩ }` which is a subtype of `P.nodes ⟨0/k, _⟩.castSucc`. Note `0/k = 0` and `⟨0, _⟩.castSucc` is definitionally 0, so the nodes type is `P.nodes 0` up to cast. The condition `≥ ⟨0%k, _⟩ = ≥ ⟨0, _⟩` is trivially true. Construct the Unique via `Unique.mk'` or directly: default is `⟨cast ... P.start, trivially⟩` and uniq via `Subtype.ext` and `P.startUnique.uniq`. For the cast, note that `P.nodes ⟨0/k, ...⟩.castSucc = P.nodes 0` by `congr 1; exact Fin.ext (by simp)`. In the negative case, `P.depth = 0` (derive contradiction if depth > 0 using nonempty_of_depth_pos and Fintype.card_pos), so the type is `P.nodes (Fin.last 0)` which equals `P.nodes 0` by `congr; simp [Fin.last]`, and use `cast ... P.startUnique`.
--/
+/-- The type `ObliviousNodes P 0` is a `Unique` type, inheriting from `P.startUnique`. -/
 def obliviousNodes_zero_unique :
     Unique (ObliviousNodes P ⟨0, Nat.zero_lt_succ _⟩) := by
   simp only [ObliviousNodes]
@@ -149,11 +149,7 @@ def obliviousNodes_zero_unique :
       toInhabited := ⟨⟨cast heq.symm P.start, by simp [Fin.le_iff_val_le_val]⟩⟩
       uniq := fun ⟨w, hw⟩ => by
         apply Subtype.ext
-        -- cast heq w = default = P.start, so w = cast heq.symm P.start
         have h2 := P.startUnique.uniq (cast heq w)
-        -- h2 : cast heq w = default
-        -- default = P.start, so cast heq w = P.start
-        -- Therefore w = cast heq.symm (cast heq w) = cast heq.symm P.start
         have : w = cast heq.symm P.start := by
           apply_fun cast heq using (by exact fun a b h => by simpa using h)
           simp [h2]; rfl
@@ -193,5 +189,15 @@ all nodes in the same sub-layer read the same variable. -/
 theorem toOblivious_IsOblivious : P.toOblivious.IsOblivious := by
   intro i j k
   simp [toOblivious, ObliviousNodeVar]
+
+open toOblivious in
+/-- The width of the oblivious branching program is at most the width of the original. -/
+theorem toOblivious_width_le : P.toOblivious.width ≤ P.width := by
+  sorry
+
+open toOblivious in
+/-- The oblivious branching program computes the same function as the original. -/
+theorem toOblivious_eval : P.toOblivious.eval = P.eval := by
+  sorry
 
 end SkipBranchingProgram
