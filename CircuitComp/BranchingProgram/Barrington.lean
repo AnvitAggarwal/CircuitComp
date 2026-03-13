@@ -1379,6 +1379,59 @@ lemma BP_to_Circuit_nodes_layer {n : ℕ} (BP : LayeredBranchingProgram (Fin n) 
       omega
     · simp
 
+open Classical in
+lemma BP_to_Circuit_evalNode_layer0_unfold {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (Fin 2) (Fin 2)) [BP.Finite]
+    (x : Fin n → Fin 2)
+    (node : BP_to_Circuit_LayerNodes BP 0) :
+    (BP_to_Circuit BP).evalNode (d := ⟨1, by simp [BP_to_Circuit, BP_to_Circuit_Depth]⟩)
+      (cast (BP_to_Circuit_nodes_layer BP 0 (Nat.zero_le _)).symm node) x =
+    (BP_to_Circuit_Gates_0 BP node).eval x := by
+  unfold FeedForward.evalNode; aesop;
+
+set_option maxHeartbeats 6400000 in
+open Classical in
+lemma BP_to_Circuit_Gates_0_correct {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (Fin 2) (Fin 2))
+    (x : Fin n → Fin 2)
+    (node : BP_to_Circuit_LayerNodes BP 0) :
+    (BP_to_Circuit_Gates_0 BP node).eval x =
+    if BP_evalSegment BP x (BP_to_Circuit_interval BP 0 node.1).1
+      (BP_to_Circuit_interval BP 0 node.1).2
+      (BP_to_Circuit_interval_le BP 0 node.1) node.2.1 = node.2.2
+    then 1 else 0 := by
+  by_cases h : node.1.val < BP.depth <;> simp +decide [ *, BP_to_Circuit_Gates_0 ];
+  · unfold FeedForward.Gate.eval; simp +decide [ BaseOp ] ; split_ifs <;> simp_all +decide ;
+    · rename_i h₁ h₂ h₃
+      generalize_proofs at *; (
+      unfold BP_to_Circuit_interval at * ; simp_all +decide [ BP_to_Circuit_interval_0_lt ];
+      contrapose! h₃; simp_all +decide [ BP_to_Circuit_interval_0_lt, BP_evalSegment_step ] ;
+      convert BP_evalSegment_step BP x ⟨ node.1.val, by linarith ⟩ ( cast ‹_› node.2.1 ) using 1
+      (generalize_proofs at *; (
+      congr! 2
+      generalize_proofs at *; (
+      exact min_eq_right ( by linarith ) |> Eq.trans <| by simp +decide [ Fin.castSucc ] ;);
+      · exact min_eq_right ( by linarith ) |> Eq.trans <| by simp +decide [ Nat.succ_eq_add_one ] ;
+      · exact?));
+      rw [ h₁ ] ; aesop;);
+    · unfold BP_to_Circuit_interval at *;
+      unfold BP_evalSegment at * ; simp_all +decide [ min_eq_right ( by linarith : ( node.fst : ℕ ) ≤ BP.depth ), min_eq_right ( by linarith : ( node.fst + 1 : ℕ ) ≤ BP.depth ) ];
+      unfold BP_evalSegment at * ; simp_all +decide [ min_eq_right ( by linarith : ( node.fst : ℕ ) ≤ BP.depth ), min_eq_right ( by linarith : ( node.fst + 1 : ℕ ) ≤ BP.depth ) ];
+      grind;
+    · unfold BP_evalSegment at *; simp_all +decide [ BP_to_Circuit_interval_0_lt ] ;
+      rename_i h₁ h₂ h₃;
+      contrapose! h₃; simp_all +decide [ BP_to_Circuit_interval ] ;
+      convert BP_evalSegment_refl BP x _ _ using 1
+      generalize_proofs at *;
+      grind;
+    · rename_i h₁ h₂ h₃
+      generalize_proofs at *;
+      unfold BP_evalSegment at h₃; simp_all +decide [ BP_to_Circuit_interval ] ;
+      unfold BP_evalSegment at h₃; simp_all +decide [ min_eq_right ( by linarith : ( node.fst : ℕ ) ≤ BP.depth ), min_eq_right ( by linarith : ( node.fst + 1 : ℕ ) ≤ BP.depth ) ] ;
+      cases Fin.exists_fin_two.mp ⟨ x ( BP.nodeVar ( cast ‹_› node.snd.1 ) ), rfl ⟩ <;> simp_all +decide [ cast ];
+      grind;
+  · unfold BP_evalSegment; simp +decide [ BP_to_Circuit_interval ] ;
+    simp_all +decide [ FeedForward.Gate.eval, ConstOp ];
+    grind
+
 /-
 Base case of the invariant (t = 0): the gate at layer 0 correctly computes single-step
 reachability.
@@ -1394,7 +1447,112 @@ lemma BP_to_Circuit_evalNode_layer_zero {n : ℕ} (BP : LayeredBranchingProgram 
       (BP_to_Circuit_interval BP 0 node.1).2
       (BP_to_Circuit_interval_le BP 0 node.1) node.2.1 = node.2.2
     then 1 else 0 := by
-  sorry
+  rw [BP_to_Circuit_evalNode_layer0_unfold, BP_to_Circuit_Gates_0_correct]
+
+set_option maxHeartbeats 6400000 in
+lemma BP_to_Circuit_evalNode_layer_succ_unfold {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (Fin 2) (Fin 2)) [BP.Finite]
+    (x : Fin n → Fin 2) (t : ℕ) (ht : t + 1 ≤ BP_to_Circuit_H BP)
+    (node : BP_to_Circuit_LayerNodes BP (t + 1)) :
+    (BP_to_Circuit BP).evalNode (d := ⟨t + 2, by unfold BP_to_Circuit; simp [BP_to_Circuit_Depth]; omega⟩)
+      (cast (BP_to_Circuit_nodes_layer BP (t + 1) ht).symm node) x =
+    (BP_to_Circuit_Gates_mid BP ⟨t, by omega⟩ node).eval
+      (fun node' => (BP_to_Circuit BP).evalNode (d := ⟨t + 1, by unfold BP_to_Circuit; simp [BP_to_Circuit_Depth]; omega⟩)
+        (cast (BP_to_Circuit_nodes_layer BP t (by omega)).symm node') x) := by
+  unfold FeedForward.evalNode at *;
+  simp +decide [ Nat.recAux, BP_to_Circuit ] at *;
+  split_ifs <;> simp_all +decide [ BP_to_Circuit_H, BP_to_Circuit_Depth ];
+  any_goals omega;
+  · -- By definition of `evalGate`, we can simplify the goal.
+    simp [FeedForward.Gate.eval] at *;
+    congr! 3;
+    · aesop;
+    · grind;
+    · congr! 3;
+      grind +ring;
+  · unfold FeedForward.Gate.eval;
+    congr! 2;
+    · grind;
+    · unfold BP_to_Circuit_Gates_mid; aesop;
+    · congr! 2;
+      congr! 1;
+      congr! 1;
+      exact?
+
+set_option maxHeartbeats 6400000 in
+open Classical in
+lemma BP_to_Circuit_Gates_mid_correct {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (Fin 2) (Fin 2)) [BP.Finite]
+    (x : Fin n → Fin 2) (t : ℕ) (ht : t + 1 ≤ BP_to_Circuit_H BP)
+    (ih_vals : BP_to_Circuit_LayerNodes BP t → Fin 2)
+    (ih_correct : ∀ (node : BP_to_Circuit_LayerNodes BP t),
+      ih_vals node =
+      if BP_evalSegment BP x (BP_to_Circuit_interval BP t node.1).1
+        (BP_to_Circuit_interval BP t node.1).2
+        (BP_to_Circuit_interval_le BP t node.1) node.2.1 = node.2.2
+      then 1 else 0)
+    (node : BP_to_Circuit_LayerNodes BP (t + 1)) :
+    (BP_to_Circuit_Gates_mid BP ⟨t, by omega⟩ node).eval ih_vals =
+    if BP_evalSegment BP x (BP_to_Circuit_interval BP (t + 1) node.1).1
+      (BP_to_Circuit_interval BP (t + 1) node.1).2
+      (BP_to_Circuit_interval_le BP (t + 1) node.1) node.2.1 = node.2.2
+    then 1 else 0 := by
+  unfold BP_to_Circuit_Gates_mid;
+  split_ifs <;> simp_all +decide [ BP_to_Circuit_Gates_mid_Matrix, BP_to_Circuit_Gates_mid_Identity ];
+  · unfold FeedForward.Gate.eval; simp +decide [ MatrixMulOp, ih_correct ] ;
+    rename_i h₁ h₂;
+    refine' ⟨ _, _, _ ⟩;
+    exact Finite.equivFin ( BP.nodes ( BP_to_Circuit_midpoint BP t node.fst ) ) ( BP_evalSegment BP x ( BP_to_Circuit_interval BP t ( 2 * node.fst ) ).1 ( BP_to_Circuit_interval BP t ( 2 * node.fst ) ).2 ( BP_to_Circuit_interval_le BP t ( 2 * node.fst ) ) ( cast ( by
+      exact congr_arg _ ( BP_to_Circuit_interval_start_eq_left_start ) ) node.snd.1 ) )
+    all_goals generalize_proofs at *;
+    · grind;
+    · convert BP_evalSegment_trans BP x ( BP_to_Circuit_interval BP t ( 2 * node.1 ) |>.1 ) ( BP_to_Circuit_midpoint BP t node.1 ) ( BP_to_Circuit_interval BP t ( 2 * node.1 + 1 ) |>.2 ) _ _ _ using 1 <;> norm_num [ BP_to_Circuit_interval_mid_eq_left_end, BP_to_Circuit_interval_mid_eq_right_start, BP_to_Circuit_interval_end_eq_right_end ];
+      any_goals tauto
+      (generalize_proofs at *; simp_all +decide [ BP_to_Circuit_interval_start_eq_left_start, BP_to_Circuit_interval_mid_eq_left_end, BP_to_Circuit_interval_mid_eq_right_start, BP_to_Circuit_interval_end_eq_right_end ] ;);
+      convert h₂.symm using 1
+      generalize_proofs at *; simp_all +decide [ BP_to_Circuit_interval_start_eq_left_start, BP_to_Circuit_interval_mid_eq_left_end, BP_to_Circuit_interval_mid_eq_right_start, BP_to_Circuit_interval_end_eq_right_end ] ;
+      · grind;
+      · congr! 1
+        generalize_proofs at *; simp_all +decide [ BP_to_Circuit_interval_start_eq_left_start, BP_to_Circuit_interval_mid_eq_left_end, BP_to_Circuit_interval_mid_eq_right_start, BP_to_Circuit_interval_end_eq_right_end ] ;
+        · exact?;
+        · exact?;
+  · unfold FeedForward.Gate.eval MatrixMulOp; simp +decide [ ih_correct ] ;
+    intro i hi; contrapose! hi; simp_all +decide [ BP_to_Circuit_interval_mid_eq_left_end, BP_to_Circuit_interval_mid_eq_right_start ] ;
+    intro h; have := BP_evalSegment_trans BP x ( BP_to_Circuit_interval BP t ( 2 * node.fst ) |>.1 ) ( BP_to_Circuit_interval BP t ( 2 * node.fst ) |>.2 ) ( BP_to_Circuit_interval BP ( t + 1 ) node.fst |>.2 ) ( by
+      exact BP_to_Circuit_interval_le BP t _ ) ( by
+      unfold BP_to_Circuit_interval; simp +decide [ Nat.mul_succ, pow_succ' ] ; ring_nf; norm_num; ) ( cast ( by
+      exact congr_arg _ ( BP_to_Circuit_interval_start_eq_left_start ) ) node.snd.1 ) ; simp_all +decide [ BP_to_Circuit_interval_start_eq_left_start, BP_to_Circuit_interval_mid_eq_left_end, BP_to_Circuit_interval_mid_eq_right_start, BP_to_Circuit_interval_end_eq_right_end ] ;
+    convert ‹¬BP_evalSegment BP x ( BP_to_Circuit_interval BP ( t + 1 ) ↑node.fst ).1 ( BP_to_Circuit_interval BP ( t + 1 ) ↑node.fst ).2 _ node.snd.1 = node.snd.2› _ using 1
+    generalize_proofs at *;
+    convert this.symm using 1
+    generalize_proofs at *;
+    · congr! 1
+      generalize_proofs at *;
+      · exact?;
+      · exact?;
+    · convert hi.symm using 1
+      generalize_proofs at *;
+      · exact?;
+      · congr! 1
+        (generalize_proofs at *; simp_all +decide [ BP_to_Circuit_interval_mid_eq_left_end, BP_to_Circuit_interval_mid_eq_right_start, BP_to_Circuit_interval_start_eq_left_start, BP_to_Circuit_interval_end_eq_right_end ] ;);
+  · unfold FeedForward.Gate.eval; simp [ih_correct];
+    convert ‹BP_evalSegment BP x ( BP_to_Circuit_interval BP ( t + 1 ) node.fst ).1 ( BP_to_Circuit_interval BP ( t + 1 ) node.fst ).2 _ node.snd.1 = node.snd.2› using 1;
+    · exact congr_arg _ ( by rw [ BP_to_Circuit_interval_end_eq_left_end_of_right_invalid ] ; aesop );
+    · congr! 1;
+      · exact?;
+      · exact?;
+      · grind;
+    · grind;
+  · simp_all +decide [ FeedForward.Gate.eval, GateOp.id ];
+    convert ‹¬BP_evalSegment BP x ( BP_to_Circuit_interval BP ( t + 1 ) ↑node.fst ).1 ( BP_to_Circuit_interval BP ( t + 1 ) ↑node.fst ).2 _ node.snd.1 = node.snd.2› using 1
+    generalize_proofs at *;
+    congr! 1
+    generalize_proofs at *;
+    · exact?;
+    · congr! 1
+      generalize_proofs at *; (
+      exact?);
+      · exact?;
+      · exact?;
+    · grind
 
 /-
 Inductive step of the invariant: if the invariant holds at level t, it holds at level t+1.
@@ -1416,7 +1574,8 @@ lemma BP_to_Circuit_evalNode_layer_succ {n : ℕ} (BP : LayeredBranchingProgram 
       (BP_to_Circuit_interval BP (t + 1) node.1).2
       (BP_to_Circuit_interval_le BP (t + 1) node.1) node.2.1 = node.2.2
     then 1 else 0 := by
-  sorry
+  rw [BP_to_Circuit_evalNode_layer_succ_unfold BP x t ht node]
+  exact BP_to_Circuit_Gates_mid_correct BP x t ht _ (fun node' => ih node') node
 
 /-
 The key correctness invariant: at layer t+1 of the circuit, the node (j, u_start, u_end)
@@ -1438,11 +1597,131 @@ lemma BP_to_Circuit_evalNode_layer {n : ℕ} (BP : LayeredBranchingProgram (Fin 
   | succ t ih =>
     exact BP_to_Circuit_evalNode_layer_succ BP x t ht (fun node => ih (le_of_lt (Nat.lt_of_lt_of_le (Nat.lt_succ_self t) ht)) node) node
 
+set_option maxHeartbeats 6400000 in
+open Classical in
+lemma BP_to_Circuit_eval₁_unfold {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (Fin 2) (Fin 2)) [BP.Finite]
+    (x : Fin n → Fin 2) :
+    (BP_to_Circuit BP).eval₁ x =
+    (BP_to_Circuit_Gates_last BP).eval
+      (fun node' => (BP_to_Circuit BP).evalNode (d := ⟨BP_to_Circuit_H BP + 1, by unfold BP_to_Circuit; simp [BP_to_Circuit_Depth]⟩)
+        (cast (BP_to_Circuit_nodes_layer BP (BP_to_Circuit_H BP) le_rfl).symm node') x) := by
+  unfold FeedForward.eval₁ FeedForward.eval; (
+  simp [FeedForward.evalNode, BP_to_Circuit];
+  unfold BP_to_Circuit_Depth; simp +decide [ Nat.recAux ] ;
+  exact?)
+
+lemma BP_to_Circuit_top_level_unique {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (Fin 2) (Fin 2)) :
+    ⌈(BP.depth : ℚ) / 2 ^ BP_to_Circuit_H BP⌉₊ ≤ 1 := by
+  refine Nat.ceil_le.mpr ?_;
+  rw [ div_le_iff₀ ] <;> norm_cast <;> norm_num [ BP_to_Circuit_H ] at * ; linarith [ Nat.le_pow_clog ( by norm_num : 1 < 2 ) BP.depth ] ;
+
+lemma BP_to_Circuit_interval_H_zero {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (Fin 2) (Fin 2))
+    (j : Fin ⌈(BP.depth : ℚ) / 2 ^ BP_to_Circuit_H BP⌉₊) :
+    (BP_to_Circuit_interval BP (BP_to_Circuit_H BP) j).1 = 0 ∧
+    (BP_to_Circuit_interval BP (BP_to_Circuit_H BP) j).2 = Fin.last BP.depth := by
+  have h_unique : ⌈(BP.depth : ℚ) / 2^(BP_to_Circuit_H BP)⌉₊ ≤ 1 := by
+    exact?
+  generalize_proofs at *; (
+  interval_cases _ : ⌈ ( BP.depth : ℚ ) / 2 ^ BP_to_Circuit_H BP⌉₊ <;> simp_all +decide [ Fin.ext_iff, BP_to_Circuit_interval ];
+  · exact False.elim <| Fin.elim0 j;
+  · have := Nat.le_pow_clog ( by decide : 1 < 2 ) BP.depth; aesop;)
+
+set_option maxHeartbeats 6400000 in
+open Classical in
+lemma BP_to_Circuit_ih_simplified {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (Fin 2) (Fin 2)) [BP.Finite]
+    (x : Fin n → Fin 2)
+    (ih_vals : BP_to_Circuit_LayerNodes BP (BP_to_Circuit_H BP) → Fin 2)
+    (ih_correct : ∀ (node : BP_to_Circuit_LayerNodes BP (BP_to_Circuit_H BP)),
+      ih_vals node =
+      if BP_evalSegment BP x (BP_to_Circuit_interval BP (BP_to_Circuit_H BP) node.1).1
+        (BP_to_Circuit_interval BP (BP_to_Circuit_H BP) node.1).2
+        (BP_to_Circuit_interval_le BP (BP_to_Circuit_H BP) node.1) node.2.1 = node.2.2
+      then 1 else 0)
+    (node : BP_to_Circuit_LayerNodes BP (BP_to_Circuit_H BP)) :
+    ih_vals node = if BP_evalSegment BP x 0 (Fin.last BP.depth) (Fin.zero_le _)
+      (cast (by rw [(BP_to_Circuit_interval_H_zero BP node.1).1]) node.2.1) =
+      cast (by rw [(BP_to_Circuit_interval_H_zero BP node.1).2]) node.2.2
+    then 1 else 0 := by
+  convert ih_correct node;
+  · exact Eq.symm ( BP_to_Circuit_interval_H_zero BP node.fst |>.2 ) ▸ rfl;
+  · exact Eq.symm ( BP_to_Circuit_interval_H_zero BP node.fst |>.1 );
+  · exact Eq.symm ( BP_to_Circuit_interval_H_zero BP node.1 |>.2 );
+  · exact?;
+  · grind
+
+set_option maxHeartbeats 6400000 in
+open Classical in
+lemma BP_to_Circuit_Gates_last_eval_unfold {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (Fin 2) (Fin 2)) [BP.Finite]
+    (ih_vals : BP_to_Circuit_LayerNodes BP (BP_to_Circuit_H BP) → Fin 2) :
+    (BP_to_Circuit_Gates_last BP).eval ih_vals =
+    if ∃ (node : BP_to_Circuit_LayerNodes BP (BP_to_Circuit_H BP)),
+      ih_vals node = 1 ∧
+      node.2.1 = cast (by rw [(BP_to_Circuit_interval_H_zero BP node.1).1]) BP.start ∧
+      BP.retVals (cast (by rw [(BP_to_Circuit_interval_H_zero BP node.1).2]) node.2.2) = 1
+    then 1 else 0 := by
+  simp only [BP_to_Circuit_Gates_last, FeedForward.Gate.eval, FinalOp]
+  apply if_congr _ rfl rfl
+  constructor
+  · rintro ⟨i, h1, h2⟩
+    exact ⟨_, h1, by simpa +decide using h2⟩
+  · rintro ⟨node, h1, h2, h3⟩
+    refine ⟨(Finite.equivFin _) node, by simp [h1], ?_⟩
+    -- The goal involves equiv.symm (equiv node) which equals node
+    -- We use `grind` to handle the dependent type equalities
+    grind
+
+open Classical in
+lemma BP_to_Circuit_Gates_last_correct {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (Fin 2) (Fin 2)) [BP.Finite]
+    (hdepth : 0 < BP.depth)
+    (x : Fin n → Fin 2)
+    (ih_vals : BP_to_Circuit_LayerNodes BP (BP_to_Circuit_H BP) → Fin 2)
+    (ih_correct : ∀ (node : BP_to_Circuit_LayerNodes BP (BP_to_Circuit_H BP)),
+      ih_vals node =
+      if BP_evalSegment BP x (BP_to_Circuit_interval BP (BP_to_Circuit_H BP) node.1).1
+        (BP_to_Circuit_interval BP (BP_to_Circuit_H BP) node.1).2
+        (BP_to_Circuit_interval_le BP (BP_to_Circuit_H BP) node.1) node.2.1 = node.2.2
+      then 1 else 0) :
+    (BP_to_Circuit_Gates_last BP).eval ih_vals = BP.eval x := by
+  rw [ BP_to_Circuit_Gates_last_eval_unfold ];
+  split_ifs;
+  · rename_i h;
+    obtain ⟨ node, hnode₁, hnode₂, hnode₃ ⟩ := h;
+    rw [ BP_to_Circuit_ih_simplified BP x ih_vals ih_correct node ] at hnode₁;
+    have h_eval : BP_evalSegment BP x 0 (Fin.last BP.depth) (Fin.zero_le _) BP.start = BP.evalLayer (Fin.last BP.depth) x := by
+      exact?;
+    convert hnode₃.symm using 1;
+    convert congr_arg BP.retVals ( Eq.symm h_eval ) using 1
+    generalize_proofs at *;
+    grind +ring;
+  · rw [ eq_comm ];
+    rename_i h;
+    contrapose! h;
+    -- Let's choose the node with j = 0, u_start = BP.start, and u_end = BP.evalLayer (Fin.last BP.depth) x.
+    use ⟨⟨0, by
+      exact Nat.ceil_pos.mpr ( by positivity )⟩, ⟨cast (by
+    unfold BP_to_Circuit_interval; norm_num;) BP.start, cast (by
+    unfold BP_to_Circuit_interval; simp +decide [ BP_to_Circuit_H ] ;
+    exact congr_arg _ ( Fin.ext <| by simp +decide [ Nat.min_eq_left ( show BP.depth ≤ 2 ^ Nat.clog 2 BP.depth from Nat.le_pow_clog ( by decide ) _ ) ] )) (BP.evalLayer (Fin.last BP.depth) x)⟩⟩
+    generalize_proofs at *;
+    simp_all +decide [ BP_to_Circuit_interval_H_zero ];
+    constructor;
+    · convert BP_evalSegment_evalLayer BP x 0 ( Fin.last BP.depth ) ( Fin.zero_le _ ) using 1;
+      · congr! 1;
+        · exact BP_to_Circuit_interval_H_zero BP ⟨ 0, by assumption ⟩ |>.1;
+        · exact BP_to_Circuit_interval_H_zero BP ⟨ 0, by assumption ⟩ |>.2;
+        · exact?;
+      · exact?;
+    · exact Or.resolve_left ( Fin.exists_fin_two.mp ( by tauto ) ) h
+
 /-
 Main correctness theorem: BP_to_Circuit computes the same function as the branching program.
+Note: requires `0 < BP.depth` because when depth = 0, the circuit construction produces no
+top-level nodes and always outputs 0, which doesn't match a BP whose `retVals start = 1`.
 -/
 open Classical in
 theorem BP_to_Circuit_correct {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (Fin 2) (Fin 2)) [BP.Finite]
+    (hdepth : 0 < BP.depth)
     (x : Fin n → Fin 2) :
     (BP_to_Circuit BP).eval₁ x = BP.eval x := by
-  sorry
+  rw [BP_to_Circuit_eval₁_unfold]
+  exact BP_to_Circuit_Gates_last_correct BP hdepth x _ (fun node' => BP_to_Circuit_evalNode_layer BP x _ le_rfl node')
