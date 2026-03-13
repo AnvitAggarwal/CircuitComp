@@ -64,6 +64,12 @@ lemma obliviousNodes_unfold (t : Fin (P.depth * Fintype.card α + 1))
           Nat.mod_lt _ hk⟩ : Fin (Fintype.card α)) } := by
   simp only [ObliviousNodes, dif_pos ht]
 
+/-- Unfolding lemma for `ObliviousNodes` at the last position. -/
+lemma obliviousNodes_last (t : Fin (P.depth * Fintype.card α + 1))
+  (ht : ¬(t : ℕ) < P.depth * Fintype.card α) :
+    ObliviousNodes P t = P.nodes (Fin.last P.depth) := by
+  simp only [ObliviousNodes, dif_neg ht]
+
 /-- The edge function for the oblivious branching program.
 If the node's variable index equals `t % k`, take the original edge and jump to `m * k`.
 Otherwise, pass through to `t + 1`. -/
@@ -162,6 +168,13 @@ def obliviousNodes_zero_unique :
       exact h (Nat.mul_pos ‹_› Fintype.card_pos)
     exact cast (by congr 1; simp [Fin.last, hd0]) P.startUnique
 
+lemma ObliviousNodeVar_eq_nodeVar (t : Fin (P.depth * Fintype.card α))
+    (hk : 0 < Fintype.card α)
+    (w : P.nodes (⟨(t : ℕ) / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith [t.isLt])⟩ : Fin P.depth).castSucc)
+    (hvar : (Fintype.equivFin α) (P.nodeVar w) = ⟨(t : ℕ) % Fintype.card α, Nat.mod_lt _ hk⟩) :
+    ObliviousNodeVar P t = P.nodeVar w := by
+  exact (Fintype.equivFin α).symm_apply_eq.mpr hvar.symm
+
 end toOblivious
 
 open toOblivious in
@@ -191,6 +204,41 @@ theorem toOblivious_IsOblivious : P.toOblivious.IsOblivious := by
   simp [toOblivious, ObliviousNodeVar]
 
 open toOblivious in
+/-- Core correspondence lemma: evalAt on the oblivious program at position `t.castSucc`
+    equals evalAt on the original program at the underlying node. -/
+private lemma toOblivious_evalAt_castSucc (x : α → β)
+    (hk : 0 < Fintype.card α)
+    (t : Fin (P.depth * Fintype.card α))
+    (u : ObliviousNodes P t.castSucc) :
+    P.toOblivious.evalAt x u =
+    P.evalAt x (cast (obliviousNodes_unfold P t.castSucc t.isLt hk) u).1 := by
+  sorry
+
+open toOblivious in
+/-- The main correspondence lemma for arbitrary positions. -/
+private lemma toOblivious_evalAt_of_lt (x : α → β)
+    (t : Fin (P.depth * Fintype.card α + 1))
+    (ht : (t : ℕ) < P.depth * Fintype.card α)
+    (hk : 0 < Fintype.card α)
+    (u : ObliviousNodes P t) :
+    P.toOblivious.evalAt x u =
+    P.evalAt x (cast (obliviousNodes_unfold P t ht hk) u).1 := by
+  exact toOblivious_evalAt_castSucc P x hk ⟨t, ht⟩ u
+
+open toOblivious in
+/-- When `P.depth = 0`, the oblivious program trivially computes the same function. -/
+private lemma toOblivious_eval_depth_zero (hd : P.depth = 0) :
+    P.toOblivious.eval = P.eval := by
+  ext x
+  rw [eval, eval, toOblivious]
+  simp only [Lean.Elab.WF.paramLet, evalAt, Nat.succ_eq_add_one, Fin.zero_eq_last_iff, hd, zero_mul,
+    ↓reduceDIte]
+  simp only [start, obliviousNodes_zero_unique, Fin.zero_eta, hd, zero_mul, lt_self_iff_false,
+    Fin.castSucc_mk, Nat.zero_mod, Lean.Elab.WF.paramLet, eq_mpr_eq_cast, cast_eq, ↓reduceDIte,
+    cast_cast]
+  grind
+
+open toOblivious in
 /-- The width of the oblivious branching program is at most the width of the original. -/
 theorem toOblivious_width_le : P.toOblivious.width ≤ P.width := by
   sorry
@@ -198,6 +246,16 @@ theorem toOblivious_width_le : P.toOblivious.width ≤ P.width := by
 open toOblivious in
 /-- The oblivious branching program computes the same function as the original. -/
 theorem toOblivious_eval : P.toOblivious.eval = P.eval := by
-  sorry
+  by_cases h : P.depth = 0
+  · convert toOblivious_eval_depth_zero P h
+  · ext x
+    have h_card_pos : 0 < Fintype.card α := by
+      exact P.nonempty_of_depth_pos (Nat.pos_of_ne_zero h) |> fun ⟨a⟩ => Fintype.card_pos_iff.mpr ⟨a⟩
+    have h_eval_at_zero : P.toOblivious.evalAt x (P.toOblivious.start) = P.evalAt x P.start := by
+      convert toOblivious_evalAt_of_lt P x ⟨0, Nat.zero_lt_succ _⟩ (by positivity) h_card_pos _ using 1
+      congr! 1;
+      · simp
+      · exact Subsingleton.helim (congrArg P.nodes ‹_›) _ _
+    exact h_eval_at_zero
 
 end SkipBranchingProgram
