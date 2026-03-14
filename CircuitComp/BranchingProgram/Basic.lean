@@ -52,7 +52,7 @@ structure BranchingProgram (α : Type u) (β : Type v) (γ : Type w) where
   /-- The relation `child` is well-founded, ensuring no infinite paths. -/
   wellFounded : WellFounded (fun v u ↦ ∃ var next val, info u = .inr (var, next) ∧ next val = v)
 
-/-
+/--
 A `SkipBranchingProgram` is similar to `LayeredBranchingProgram`, but allows for skipping layers:
 a node at layer `n` can skip to any layer `m` with `n < m`. This is largely equivalent
 computationally, but allows for a reduction in width in some cases.
@@ -742,5 +742,21 @@ theorem toLayered_eval : P.toLayered.eval = P.eval := by
   ext x
   rw [← P.toLayered.evalAt_evalLayer_eq_eval x 0]
   exact P.toLayered_evalAt x 0 (Sum.inl P.start)
+
+@[simp]
+theorem toLayered_width [P.Finite] : P.toLayered.width = P.width := by
+  simp only [ActiveNodes, ← Nat.card_sum, toLayered,
+    SkipBranchingProgram.width, LayeredBranchingProgram.width]
+
+theorem IsOblivious.toLayered (h : P.IsOblivious) : P.toLayered.IsOblivious := by
+  rintro i (j | ⟨j, hj⟩) (k | ⟨k, hk⟩)
+  · exact h i j k
+  · simp only [SkipBranchingProgram.toLayered]
+    rw [dif_pos ⟨j⟩]
+    exact h i j _
+  · simp only [SkipBranchingProgram.toLayered]
+    rw [dif_pos ⟨k⟩]
+    exact h i _ k
+  · rfl
 
 end SkipBranchingProgram

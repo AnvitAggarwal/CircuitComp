@@ -16,24 +16,6 @@ namespace SkipBranchingProgram
 
 variable {α : Type u} {β : Type v} {γ : Type w} [Fintype α] (P : SkipBranchingProgram α β γ)
 
-omit [Fintype α] in
-theorem toLayered_width [P.Finite] : P.toLayered.width = P.width := by
-  simp only [ActiveNodes, ← Nat.card_sum, toLayered,
-    SkipBranchingProgram.width, LayeredBranchingProgram.width]
-
-omit [Fintype α] in
-theorem toLayered_IsOblivious (h : P.IsOblivious) : P.toLayered.IsOblivious := by
-  intro i j k
-  rcases j with (j | ⟨j, hj⟩) <;> rcases k with (k | ⟨k, hk⟩)
-  · exact h i j k
-  · simp only [toLayered]
-    rw [dif_pos ⟨j⟩]
-    exact h i j _
-  · simp only [toLayered]
-    rw [dif_pos ⟨k⟩]
-    exact h i _ k
-  · rfl
-
 namespace toOblivious
 
 /-- Node type at depth `t` in `SkipBranchingProgram.toOblivious`. -/
@@ -322,12 +304,29 @@ private lemma toOblivious_eval_depth_zero (hd : P.depth = 0) :
     start, obliviousNodes_zero_unique, eq_mpr_eq_cast]
   grind
 
-open toOblivious in
-/-- The width of the oblivious branching program is at most the width of the original. -/
-theorem toOblivious_width_le : P.toOblivious.width ≤ P.width := by
+/-- The width of the oblivious branching program is at most double the width of the original:
+Intuitively, one layer L gets split into several sub-layers. At sublayer k,
+the `P.ActiveNodes` going past are present in `P.toOblivious` unchanged, and the nodes
+in sublayer k contribute their width as before, as do the nodes in later sublayers (as ActiveNodes).
+But the nodes in the earlier sublayers can split into up to `|β|` different `ActiveNodes`
+depending on which value they read. So there's a `Fintype.card β * P.width` bound, but we can
+improve this to a factor of 2.
+
+Suppose the widest layer in `P` is layer L, and it has n nodes and a active nodes.
+
+After toOblivious, it has a active nodes still, the last sublayer has `< n` nodes, and the
+other (n-1) sublayer nodes contribute β each. They could point to up to β times as many.
+Call that N. But the next layer has n' nodes and a' active nodes, and we know
+that n' + a' ≤ n + a, because L was the widest. Now N + a is at most n' + a', since
+each of those has to either end at the next layer, or go past there there and count as
+an ActiveNode. So `N + a ≤ n' + a' ≤ n + a`, and the new width is less than
+`n + a + N ≤ 2n + a ≤ 2(n + a) = 2 * P.width`. -/
+theorem toOblivious_width_le [Fintype β] : P.toOblivious.width < 2 * P.width := by
+  open toOblivious in
   sorry
 
 /-- The oblivious branching program computes the same function as the original. -/
+@[simp]
 theorem toOblivious_eval : P.toOblivious.eval = P.eval := by
   by_cases h : P.depth = 0
   · convert toOblivious_eval_depth_zero P h
