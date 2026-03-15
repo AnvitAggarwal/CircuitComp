@@ -1396,13 +1396,16 @@ lemma BP_to_Circuit_Gates_0_correct {n : ℕ} (BP : LayeredBranchingProgram (Fin
       (BP_to_Circuit_interval_le BP 0 node.1) node.2.1 = node.2.2
     then 1 else 0 := by
   by_cases h : node.1.val < BP.depth <;> simp [*, BP_to_Circuit_Gates_0]
-  · unfold FeedForward.Gate.eval; simp [BaseOp]; split_ifs <;> simp_all
-    · rename_i h₁ h₂ h₃
+  · unfold FeedForward.Gate.eval
+    simp [BaseOp]
+    split_ifs
+    · rfl
+    · exfalso
+      rename_i h₁ h₂ h₃
       generalize_proofs at *
       unfold BP_to_Circuit_interval at *
-      simp_all
+      simp_all only [Nat.pow_zero, Fin.isValue]
       contrapose! h₃
-      simp_all
       convert BP_evalSegment_step BP x ⟨node.1.val, by linarith⟩ (cast ‹_› node.2.1) using 1
       congr! 2
       · exact min_eq_right (by linarith) |> Eq.trans <| by simp [Fin.castSucc]
@@ -1410,21 +1413,23 @@ lemma BP_to_Circuit_Gates_0_correct {n : ℕ} (BP : LayeredBranchingProgram (Fin
       · exact HEq.symm (cast_heq _ _)
       · rw [h₁]
         aesop
-    · unfold BP_to_Circuit_interval at *
-      unfold BP_evalSegment at *
-      simp_all [min_eq_right (by linarith : (node.fst : ℕ) ≤ BP.depth)]
-      unfold BP_evalSegment at *
-      simp_all [min_eq_right (by linarith : (node.fst : ℕ) ≤ BP.depth)]
-      grind
+    · grind [BP_evalSegment, BP_to_Circuit_interval]
+    · rfl
+    · rfl
     · unfold BP_evalSegment at *
       rename_i h₁ h₂ h₃
       contrapose! h₃
-      simp [BP_to_Circuit_interval_0_lt, *]
-      simp [BP_to_Circuit_interval]
+      simp only [Fin.mk.injEq, Fin.succ_mk, Fin.castSucc_mk, cast_eq,
+        BP_to_Circuit_interval, Nat.pow_zero]
       convert BP_evalSegment_refl BP x _ _ using 1
       generalize_proofs at *
-      sorry --grind
-    · rename_i h₁ h₂ h₃
+      cases Fin.exists_fin_two.mp ⟨ x ( BP.nodeVar ( cast ‹_› node.snd.1 ) ), rfl ⟩
+      · simp_all [BP_to_Circuit_interval]
+      simp only [BP_evalSegment_refl]
+      convert BP_evalSegment_refl BP x _ _ using 1;
+      grind only [= Lean.Grind.toInt_fin, = min_def]
+    · exfalso
+      rename_i h₁ h₂ h₃
       generalize_proofs at *
       unfold BP_evalSegment at h₃
       simp only [BP_to_Circuit_interval, Nat.pow_zero, pow_zero,
@@ -1435,6 +1440,7 @@ lemma BP_to_Circuit_Gates_0_correct {n : ℕ} (BP : LayeredBranchingProgram (Fin
       cases Fin.exists_fin_two.mp ⟨x (BP.nodeVar (cast ‹_› node.snd.1)), rfl⟩
       · simp_all [cast]
       · grind only [= Nat.min_def, = min_def, cases Or]
+    · rfl
   · unfold BP_evalSegment; simp [BP_to_Circuit_interval]
     simp_all only [Gate.eval, Fin.isValue, ConstOp]
     grind only [= Nat.min_def, = min_def, cases Or]

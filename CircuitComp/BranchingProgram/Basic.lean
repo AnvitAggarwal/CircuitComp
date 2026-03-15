@@ -324,6 +324,13 @@ that layer by - this reflects the notion of width most naturally corresponding t
 def width : ℕ :=
   ⨆ i : Fin (P.depth + 1), Nat.card (P.nodes i) + Nat.card (P.ActiveNodes i)
 
+lemma width_pos : 0 < P.width := by
+  by_contra h_neg
+  have h_card_nodes_zero : ∀ i : Fin (P.depth + 1), Nat.card (P.nodes i) + Nat.card (P.ActiveNodes i) = 0 := by
+    exact fun i => le_antisymm (le_trans (le_ciSup (Finite.bddAbove_range fun i => Nat.card (P.nodes i) + Nat.card (P.ActiveNodes i)) i) (le_of_not_gt h_neg)) (Nat.zero_le _)
+  specialize h_card_nodes_zero 0
+  simp_all [Nat.card_eq_zero]
+
 end SkipBranchingProgram
 
 namespace BranchingProgram

@@ -112,10 +112,14 @@ def obliviousEdge (t : Fin (P.depth * Fintype.card α))
     rw [obliviousNodes_unfold P _ ht1_lt hk_pos]
     exact ⟨cast (by congr 1; exact Fin.ext h_div.symm) u'.1,
            by
-             convert Nat.succ_le_of_lt hgt using 1
-             simp [Fin.le_iff_val_le_val, *]
-             sorry --grind
-            ⟩
+            convert Nat.succ_le_of_lt hgt using 1
+            simp [Fin.le_iff_val_le_val, *]
+            simp +zetaDelta only [Fin.castSucc_mk] at hu' hgt ⊢
+            simp only [Fin.lt_def]
+            congr! 4
+            · exact Fin.ext h_div
+            · simp
+           ⟩
 
 /-- The edge target is strictly above the source layer. -/
 lemma obliviousEdge_fst_gt (t : Fin (P.depth * Fintype.card α))
@@ -215,7 +219,7 @@ private lemma toOblivious_evalAt_castSucc (x : α → β)
       split_ifs with hml
       · rw [dif_pos hml]
         dsimp only
-        convert ih _ _ ⟨(P.edges (cast (toOblivious.obliviousNodes_unfold P t.castSucc t.2 hk) u |>.1) (x (P.nodeVar (cast (toOblivious.obliviousNodes_unfold P t.castSucc t.2 hk) u |>.1)))).1 * Fintype.card α, hml ⟩ _ rfl using 1
+        convert ih _ _ ⟨(P.edges (cast (toOblivious.obliviousNodes_unfold P t.castSucc t.2 hk) u |>.1) (x (P.nodeVar (cast (toOblivious.obliviousNodes_unfold P t.castSucc t.2 hk) u |>.1)))).1 * Fintype.card α, hml⟩ _ rfl using 1
         convert rfl using 1
         · simp only [Fin.val_castSucc, Fin.castSucc_mk, eq_mpr_eq_cast, cast_cast, cast_eq]
           congr! 1
@@ -305,6 +309,358 @@ private lemma toOblivious_eval_depth_zero (hd : P.depth = 0) :
     start, obliviousNodes_zero_unique, eq_mpr_eq_cast]
   grind
 
+omit [Fintype α] in
+lemma width_layer_le (i : Fin (P.depth + 1)) :
+    Nat.card (P.nodes i) + Nat.card (P.ActiveNodes i) ≤ P.width := by
+  apply le_ciSup ?_ i
+  exact Set.Finite.bddAbove (Set.finite_range _)
+
+open toOblivious in
+lemma toOblivious_nodes_card_le [P.Finite]
+    (t : Fin (P.depth * Fintype.card α + 1))
+    (ht : (t : ℕ) < P.depth * Fintype.card α)
+    (hk : 0 < Fintype.card α) :
+    Nat.card (ObliviousNodes P t) ≤
+    Nat.card (P.nodes (⟨(t : ℕ) / Fintype.card α,
+      Nat.div_lt_of_lt_mul (by linarith)⟩ : Fin P.depth).castSucc) := by
+  rw [obliviousNodes_unfold P t ht hk]
+  exact Finite.card_subtype_le _
+
+section width_helpers
+open toOblivious
+
+private lemma obliviousEdge_passthrough_not_active
+    (l₂ : Fin (P.depth * Fintype.card α))
+    (v : ObliviousNodes P l₂.castSucc) (b : β)
+    (hvar : ¬(Fintype.equivFin α) (P.nodeVar (cast (obliviousNodes_unfold P l₂.castSucc l₂.isLt
+      (Nat.pos_of_mul_pos_left (Fin.pos l₂))) v).1) =
+      ⟨(l₂ : ℕ) % Fintype.card α, Nat.mod_lt _ (Nat.pos_of_mul_pos_left (Fin.pos l₂))⟩) :
+    (obliviousEdge P l₂ v b).1 = ⟨(l₂ : ℕ) + 1, by omega⟩ := by
+  unfold obliviousEdge
+  simp [hvar]
+
+/-- Passthrough edges in obliviousEdge cannot produce active nodes: if the variable
+doesn't match, the target layer is l₂+1, which is ≤ t when l₂ < t. -/
+private lemma oblivious_active_passthrough_le
+    (l₂ : Fin (P.depth * Fintype.card α))
+    (v : ObliviousNodes P l₂.castSucc) (b : β)
+    (hvar : ¬(Fintype.equivFin α) (P.nodeVar (cast (obliviousNodes_unfold P l₂.castSucc l₂.isLt
+      (Nat.pos_of_mul_pos_left (Fin.pos l₂))) v).1) =
+      ⟨(l₂ : ℕ) % Fintype.card α, Nat.mod_lt _ (Nat.pos_of_mul_pos_left (Fin.pos l₂))⟩)
+    (t : Fin (P.depth * Fintype.card α + 1))
+    (hl₂_lt : l₂.castSucc < t) :
+    ¬((obliviousEdge P l₂ v b).1 > t) := by
+  have := obliviousEdge_passthrough_not_active P l₂ v b hvar
+  simpa [Fin.lt_def, this] using hl₂_lt
+
+/-- When obliviousEdge does a variable-match jump, the target layer is m' * k
+for some m' which is an original layer target. -/
+private lemma oblivious_active_jump_layer
+    (l₂ : Fin (P.depth * Fintype.card α))
+    (v : ObliviousNodes P l₂.castSucc) (b : β)
+    (hvar : (Fintype.equivFin α) (P.nodeVar (cast (obliviousNodes_unfold P l₂.castSucc l₂.isLt
+      (Nat.pos_of_mul_pos_left (Fin.pos l₂))) v).1) =
+      ⟨(l₂ : ℕ) % Fintype.card α, Nat.mod_lt _ (Nat.pos_of_mul_pos_left (Fin.pos l₂))⟩) :
+    (obliviousEdge P l₂ v b).1.val =
+      (P.edges (cast (obliviousNodes_unfold P l₂.castSucc l₂.isLt
+        (Nat.pos_of_mul_pos_left (Fin.pos l₂))) v).1 b).1.val * Fintype.card α
+    ∨ (obliviousEdge P l₂ v b).1.val = P.depth * Fintype.card α := by
+  simp only [obliviousEdge, ↓reduceDIte, hvar]
+  split <;> simp
+
+/-- Every active node of the oblivious program at layer t comes from a variable-match jump,
+NOT a passthrough. In particular, the obliviousEdge that created it satisfies the hvar
+condition. This means the target layer m satisfies m = m'*k or m = depth*k
+(by oblivious_active_jump_layer). -/
+private lemma toOblivious_active_is_jump
+    (t : Fin (P.depth * Fintype.card α + 1))
+    (hk : 0 < Fintype.card α)
+    (a : P.toOblivious.ActiveNodes t) :
+    ∃ (l₂ : Fin (P.depth * Fintype.card α))
+      (v : ObliviousNodes P l₂.castSucc) (b : β),
+      l₂.castSucc < t ∧
+      (Fintype.equivFin α) (P.nodeVar (cast (obliviousNodes_unfold P l₂.castSucc l₂.isLt hk) v).1) =
+        ⟨(l₂ : ℕ) % Fintype.card α, Nat.mod_lt _ hk⟩ ∧
+      obliviousEdge P l₂ v b = a.1 := by
+  obtain ⟨l₂, hl₂_lt, v, b, hedge⟩ : ∃ l₂ : Fin (P.depth * Fintype.card α), l₂.castSucc < t ∧ ∃ v : ObliviousNodes P l₂.castSucc, ∃ b : β, obliviousEdge P l₂ v b = a.1 := by
+    rcases a with ⟨⟨m, v⟩, hm₁, hm₂⟩
+    exact hm₂
+  by_cases hvar : (Fintype.equivFin α) (P.nodeVar (cast (obliviousNodes_unfold P l₂.castSucc l₂.isLt hk) v).1) = ⟨(l₂ : ℕ) % Fintype.card α, Nat.mod_lt _ hk⟩
+  · exact ⟨l₂, v, b, hl₂_lt, hvar, hedge⟩
+  · exact False.elim (absurd (oblivious_active_passthrough_le P l₂ v b hvar t hl₂_lt) (by simpa [hedge] using a.2.1))
+
+/--The target layer of an oblivious active node at t is always a multiple of k. -/
+private lemma toOblivious_active_target_div_k_mul
+    (t : Fin (P.depth * Fintype.card α + 1))
+    (hk : 0 < Fintype.card α)
+    (a : P.toOblivious.ActiveNodes t) :
+    Fintype.card α ∣ a.1.1.val := by
+  obtain ⟨l₂, v, b, hl₂, hv, hb⟩ := toOblivious_active_is_jump P t hk a
+  have h := oblivious_active_jump_layer P l₂ v b hv
+  simp only [Fin.val_castSucc, Fin.castSucc_mk, hb] at h
+  rcases h with h | h
+  · simp only [dvd_mul_left, h]
+  · simp only [dvd_mul_left, h]
+
+/-- The underlying P layer of an oblivious active node target is > t/k. -/
+private lemma toOblivious_active_target_layer_gt
+    (t : Fin (P.depth * Fintype.card α + 1))
+    (hk : 0 < Fintype.card α)
+    (a : P.toOblivious.ActiveNodes t) :
+    a.1.1.val / Fintype.card α > (t : ℕ) / Fintype.card α := by
+  have h_gt_t : (a.1.1 : ℕ) > t := a.2.1
+  have h_div := toOblivious_active_target_div_k_mul P t hk a
+  apply Nat.div_lt_of_lt_mul
+  linarith [Nat.div_mul_cancel h_div, Nat.div_mul_le_self t (Fintype.card α)]
+
+/-- Extract the underlying P-sigma from an ObliviousNodes element at a layer divisible by k.
+    At m < depth*k: the ObliviousNodes is a subtype of P.nodes, extract .val.
+    At m ≥ depth*k: the ObliviousNodes IS P.nodes (Fin.last depth). -/
+private noncomputable def obliviousNodeToPSigma
+    (m : Fin (P.depth * Fintype.card α + 1))
+    (hk : 0 < Fintype.card α)
+    (w : ObliviousNodes P m) :
+    (m' : Fin (P.depth + 1)) × P.nodes m' := by
+  by_cases hlt : (m : ℕ) < P.depth * Fintype.card α
+  · exact ⟨Fin.castSucc ⟨m.val / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith)⟩,
+           (cast (obliviousNodes_unfold P m hlt hk) w).val⟩
+  · exact ⟨Fin.last P.depth, cast (obliviousNodes_last P m hlt) w⟩
+
+/-- The P-sigma extraction map is injective: if two oblivious nodes at
+divisible-by-k layers map to the same P-sigma, the original sigma pairs are equal. -/
+private lemma obliviousNodeToPSigma_injective (hk : 0 < Fintype.card α)
+    {m₁ m₂ : Fin (P.depth * Fintype.card α + 1)}
+    (hm₁ : Fintype.card α ∣ m₁.val) (hm₂ : Fintype.card α ∣ m₂.val)
+    {w₁ : ObliviousNodes P m₁} {w₂ : ObliviousNodes P m₂}
+    (h : obliviousNodeToPSigma P m₁ hk w₁ = obliviousNodeToPSigma P m₂ hk w₂) :
+    (Sigma.mk (β := ObliviousNodes P) m₁ w₁) = ⟨m₂, w₂⟩ := by
+  have h_eq : m₁ = m₂ := by
+    unfold obliviousNodeToPSigma at h
+    split_ifs at h
+    · simp_all [Fin.ext_iff]
+    · simp [Fin.ext_iff] at h ⊢
+      exact absurd h.1 (Nat.ne_of_lt (Nat.div_lt_of_lt_mul <| by linarith))
+    · simp [Fin.ext_iff] at h ⊢
+      exact absurd h.1 (by nlinarith [Nat.div_mul_cancel hm₂, Fin.is_lt m₂])
+    · simp [Fin.ext_iff] at h ⊢
+      linarith [Fin.is_lt m₁, Fin.is_lt m₂]
+  subst h_eq
+  grind [obliviousNodeToPSigma]
+
+/-- The first component of obliviousNodeToPSigma is m / k. -/
+private lemma obliviousNodeToPSigma_fst
+    (m : Fin (P.depth * Fintype.card α + 1))
+    (hk : 0 < Fintype.card α)
+    (w : ObliviousNodes P m) :
+    (obliviousNodeToPSigma P m hk w).fst.val = m.val / Fintype.card α := by
+  unfold obliviousNodeToPSigma
+  split_ifs
+  · simp [Fin.castSucc]
+  · simp only [Fin.last]
+    rw [Nat.div_eq_of_eq_mul_left hk]
+    omega
+
+/--
+The P-sigma of an oblivious active node's target equals some P.edges output,
+    and the source layer of that edge is ≤ t/k. -/
+private lemma active_pSigma_is_edge
+    (t : Fin (P.depth * Fintype.card α + 1))
+    (hk : 0 < Fintype.card α)
+    (a : P.toOblivious.ActiveNodes t) :
+    ∃ (i' : Fin P.depth) (v' : P.nodes i'.castSucc) (b' : β),
+      i'.val ≤ (t : ℕ) / Fintype.card α ∧
+      P.edges v' b' = obliviousNodeToPSigma P a.1.1 hk a.1.2 := by
+  obtain ⟨l₂, v, b, hl₂_lt, hvar, hedge⟩ := toOblivious_active_is_jump P t hk a
+  by_cases hml : (P.edges (cast (obliviousNodes_unfold P l₂.castSucc l₂.isLt hk) v).1 b).1.val * Fintype.card α < P.depth * Fintype.card α <;> simp_all [obliviousEdge]
+  · refine ⟨⟨l₂.val / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith [l₂.isLt])⟩, ?_, ?_⟩
+    · exact Nat.div_le_div_right (Nat.le_of_lt hl₂_lt) |> le_trans <| by simp
+    · unfold obliviousNodeToPSigma
+      use (cast (obliviousNodes_unfold P l₂.castSucc l₂.isLt hk) v).1, b
+      simp only [Fin.val_castSucc, Fin.castSucc_mk]
+      cases a
+      subst hedge
+      simp_all only [↓reduceDIte, cast_cast, cast_eq]
+      ext1
+      · ext1
+        simp_all only [Nat.mul_div_left]
+      · simp_all only [heq_cast_iff_heq, heq_eq_eq]
+  · refine ⟨⟨l₂.val / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith [Fin.is_lt l₂])⟩, ?_, ?_⟩
+    · exact Nat.div_le_div_right hl₂_lt.le
+    · unfold obliviousNodeToPSigma
+      simp only [← hedge, lt_self_iff_false]
+      grind
+
+/-- Under hall, the source of a variable-match jump must be in an earlier block. -/
+private lemma active_source_block_lt_of_hall
+    (t : Fin (P.depth * Fintype.card α + 1))
+    (ht : (t : ℕ) < P.depth * Fintype.card α)
+    (hk : 0 < Fintype.card α)
+    (hall : ∀ w : P.nodes (⟨(t : ℕ) / Fintype.card α,
+      Nat.div_lt_of_lt_mul (by linarith)⟩ : Fin P.depth).castSucc,
+      (Fintype.equivFin α (P.nodeVar w)).val ≥ (t : ℕ) % Fintype.card α)
+    (l₂ : Fin (P.depth * Fintype.card α))
+    (v : ObliviousNodes P l₂.castSucc)
+    (hl₂_lt : l₂.castSucc < t)
+    (hvar : (Fintype.equivFin α) (P.nodeVar (cast (obliviousNodes_unfold P l₂.castSucc l₂.isLt hk) v).1) =
+      ⟨(l₂ : ℕ) % Fintype.card α, Nat.mod_lt _ hk⟩) :
+    l₂.val / Fintype.card α < t.val / Fintype.card α := by
+  by_contra h_neg
+  push_neg at h_neg
+  have h_le : l₂.val / Fintype.card α ≤ t.val / Fintype.card α :=
+    Nat.div_le_div_right (Nat.le_of_lt (by exact hl₂_lt))
+  have h_eq : l₂.val / Fintype.card α = t.val / Fintype.card α := le_antisymm h_le h_neg
+  have h_mod_lt : l₂.val % Fintype.card α < t.val % Fintype.card α := by
+    nlinarith [Nat.div_add_mod l₂.val (Fintype.card α), Nat.div_add_mod t.val (Fintype.card α),
+              show (l₂ : ℕ) < (t : ℕ) from hl₂_lt]
+  have h_source : (↑((Fintype.equivFin α) (P.nodeVar (cast (obliviousNodes_unfold P l₂.castSucc l₂.isLt hk) v).1)) : ℕ) ≥
+      t.val % Fintype.card α := by
+    have h_layer_eq : P.nodes (Fin.castSucc ⟨l₂.val / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith [l₂.isLt])⟩) =
+        P.nodes (Fin.castSucc ⟨t.val / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith)⟩) := by
+      congr 1; ext; simp [Fin.castSucc]; exact h_eq
+    have hsrc := hall (cast h_layer_eq (cast (obliviousNodes_unfold P l₂.castSucc l₂.isLt hk) v).val)
+    convert hsrc using 3
+    grind
+  simp [hvar] at h_source
+  omega
+
+/-- Under hall, the source layer of the edge is strictly less than t/k. -/
+private lemma active_pSigma_source_lt_of_hall
+    (t : Fin (P.depth * Fintype.card α + 1))
+    (ht : (t : ℕ) < P.depth * Fintype.card α)
+    (hk : 0 < Fintype.card α)
+    (hall : ∀ w : P.nodes (⟨(t : ℕ) / Fintype.card α,
+      Nat.div_lt_of_lt_mul (by linarith)⟩ : Fin P.depth).castSucc,
+      (Fintype.equivFin α (P.nodeVar w)).val ≥ (t : ℕ) % Fintype.card α)
+    (a : P.toOblivious.ActiveNodes t) :
+    ∃ (i' : Fin P.depth) (v' : P.nodes i'.castSucc) (b' : β),
+      i'.val < (t : ℕ) / Fintype.card α ∧
+      P.edges v' b' = obliviousNodeToPSigma P a.1.1 hk a.1.2 := by
+  obtain ⟨l₂, v, b, hl₂_lt, hvar, hedge⟩ := toOblivious_active_is_jump P t hk a
+  have h_lt := active_source_block_lt_of_hall P t ht hk hall l₂ v hl₂_lt hvar
+  refine ⟨⟨l₂.val / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith [l₂.isLt])⟩,
+    (cast (obliviousNodes_unfold P l₂.castSucc l₂.isLt hk) v).val, b, h_lt, ?_⟩
+  by_cases hml : (P.edges (cast (obliviousNodes_unfold P l₂.castSucc l₂.isLt hk) v).1 b).1.val * Fintype.card α < P.depth * Fintype.card α
+  · simp_all only [obliviousEdge, ↓reduceDIte]
+    unfold obliviousNodeToPSigma
+    cases a
+    subst hedge
+    simp_all only [Fin.castSucc_mk, ↓reduceDIte]
+    ext1
+    · ext1
+      simp only [Nat.mul_div_left, *]
+    · simp only [heq_cast_iff_heq, heq_eq_eq, cast_cast, cast_eq, eq_mpr_eq_cast]
+  · simp_all only [obliviousEdge, eq_mpr_eq_cast, mul_lt_mul_iff_left₀]
+    unfold obliviousNodeToPSigma
+    simp only [← hedge]
+    grind
+
+/-- Active nodes of P.toOblivious at any position t inject into
+P.nodes at the next original layer ⊕ P.ActiveNodes at the next original layer. -/
+private lemma toOblivious_active_card_le [Fintype β] [P.Finite]
+    (t : Fin (P.depth * Fintype.card α + 1))
+    (ht : (t : ℕ) < P.depth * Fintype.card α)
+    (hk : 0 < Fintype.card α) :
+    Nat.card (P.toOblivious.ActiveNodes t) ≤
+    Nat.card (P.nodes (⟨(t : ℕ) / Fintype.card α,
+      Nat.div_lt_of_lt_mul (by linarith)⟩ : Fin P.depth).succ) +
+    Nat.card (P.ActiveNodes (⟨(t : ℕ) / Fintype.card α,
+      Nat.div_lt_of_lt_mul (by linarith)⟩ : Fin P.depth).succ) := by
+  obtain ⟨f, hf⟩ : ∃ f : P.toOblivious.ActiveNodes t → P.nodes (Fin.succ ⟨t / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith)⟩) ⊕ P.ActiveNodes (Fin.succ ⟨t / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith)⟩), Function.Injective f := by
+    set i' : Fin P.depth := ⟨t.val / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith)⟩
+    set i : Fin (P.depth + 1) := Fin.castSucc i'
+    refine' ⟨fun a => if h : (obliviousNodeToPSigma P a.1.1 hk a.1.2).fst.val = i'.val + 1 then Sum.inl (cast (by
+    exact congr_arg _ (Fin.ext h)) (obliviousNodeToPSigma P a.1.1 hk a.1.2).snd) else Sum.inr ⟨(obliviousNodeToPSigma P a.1.1 hk a.1.2), by
+      have h_gt : (obliviousNodeToPSigma P a.1.1 hk a.1.2).fst.val > i'.val + 1 := by
+        have h_gt : (obliviousNodeToPSigma P a.1.1 hk a.1.2).fst.val > i'.val := by
+          exact a.2.1 |> fun h => by simpa [obliviousNodeToPSigma_fst] using toOblivious_active_target_layer_gt P t hk a
+        exact lt_of_le_of_ne h_gt (Ne.symm h) |> Nat.lt_of_le_of_lt (Nat.le_refl _) |> Nat.lt_of_lt_of_le <| Nat.le_refl _
+      obtain ⟨l₂, v, b, hl₂, h_edge⟩ := active_pSigma_is_edge P t hk a
+      exact ⟨h_gt, l₂, Nat.lt_succ_of_le hl₂, v, b, h_edge⟩⟩, _⟩
+    intro a b hab
+    have h_eq : obliviousNodeToPSigma P a.1.1 hk a.1.2 = obliviousNodeToPSigma P b.1.1 hk b.1.2 := by
+      grind
+    exact Subtype.ext <| obliviousNodeToPSigma_injective P hk (toOblivious_active_target_div_k_mul P t hk a) (toOblivious_active_target_div_k_mul P t hk b) h_eq
+  have h_card_le : Nat.card (P.toOblivious.ActiveNodes t) ≤ Nat.card (P.nodes (Fin.succ ⟨t / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith)⟩) ⊕ P.ActiveNodes (Fin.succ ⟨t / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith)⟩)) := by
+    have h_finite_active : Finite (P.ActiveNodes (Fin.succ ⟨t / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith)⟩)) := by
+      exact Set.Finite.to_subtype (Set.toFinite _)
+    exact Nat.card_le_card_of_injective f hf
+  -- Apply the fact that the cardinality of a sum type is the sum of the cardinalities of the individual types.
+  have h_card_sum : Nat.card (P.nodes (Fin.succ ⟨t / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith)⟩) ⊕ P.ActiveNodes (Fin.succ ⟨t / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith)⟩)) = Nat.card (P.nodes (Fin.succ ⟨t / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith)⟩)) + Nat.card (P.ActiveNodes (Fin.succ ⟨t / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith)⟩)) := by
+    exact @Nat.card_sum _ _ _ (Set.Finite.to_subtype (Set.toFinite _))
+  exact h_card_sum ▸ h_card_le
+
+private lemma toOblivious_active_le_of_all_ge [P.Finite]
+    (t : Fin (P.depth * Fintype.card α + 1))
+    (ht : (t : ℕ) < P.depth * Fintype.card α)
+    (hk : 0 < Fintype.card α)
+    (hall : ∀ w : P.nodes (⟨(t : ℕ) / Fintype.card α,
+      Nat.div_lt_of_lt_mul (by linarith)⟩ : Fin P.depth).castSucc,
+      (Fintype.equivFin α (P.nodeVar w)).val ≥ (t : ℕ) % Fintype.card α) :
+    Nat.card (P.toOblivious.ActiveNodes t) ≤
+    Nat.card (P.ActiveNodes (⟨(t : ℕ) / Fintype.card α,
+      Nat.div_lt_of_lt_mul (by linarith)⟩ : Fin P.depth).castSucc) := by
+  set i : Fin P.depth := ⟨(t : ℕ) / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith)⟩ with i_def
+  haveI : Finite (P.ActiveNodes i.castSucc) := by
+    apply Finite.of_injective (f := fun (x : P.ActiveNodes i.castSucc) => x.1)
+    intro a b h; exact Subtype.ext h
+  apply Nat.card_le_card_of_injective
+    (f := fun a => ⟨obliviousNodeToPSigma P a.1.1 hk a.1.2,
+      by
+        refine ⟨?_, ?_⟩
+        · -- s.1 > i.castSucc
+          have h1 := toOblivious_active_target_layer_gt P t hk a
+          have h2 := obliviousNodeToPSigma_fst P a.1.1 hk a.1.2
+          show (obliviousNodeToPSigma P a.1.1 _ a.1.2).1 > i.castSucc
+          simp only [Fin.lt_def, Fin.val_castSucc]
+          rw [h2]; exact h1
+        · -- source witness
+          obtain ⟨i', v', b', h_lt, h_edge⟩ := active_pSigma_source_lt_of_hall P t ht hk hall a
+          refine ⟨i', ?_, v', b', h_edge⟩
+          show i'.castSucc < i.castSucc
+          simp only [Fin.lt_def, Fin.val_castSucc]
+          exact h_lt
+     ⟩)
+  intro a₁ a₂ h_eq
+  apply Subtype.ext
+  refine obliviousNodeToPSigma_injective P hk ?_ ?_ (congrArg Subtype.val h_eq)
+  · exact toOblivious_active_target_div_k_mul P t hk a₁
+  · exact toOblivious_active_target_div_k_mul P t hk a₂
+
+/-- When all nodes at layer i have equivFin(nodeVar) ≥ j (where j = t%k),
+then total ≤ P.width. -/
+private lemma toOblivious_total_le_of_all_ge [P.Finite]
+    (t : Fin (P.depth * Fintype.card α + 1))
+    (ht : (t : ℕ) < P.depth * Fintype.card α)
+    (hk : 0 < Fintype.card α)
+    (hall : ∀ w : P.nodes (⟨(t : ℕ) / Fintype.card α,
+      Nat.div_lt_of_lt_mul (by linarith)⟩ : Fin P.depth).castSucc,
+      (Fintype.equivFin α (P.nodeVar w)).val ≥ (t : ℕ) % Fintype.card α) :
+    Nat.card (P.toOblivious.nodes t) + Nat.card (P.toOblivious.ActiveNodes t) ≤ P.width := by
+  -- The cardinality of the nodes in the oblivious nodes at position t is equal to the cardinality of the nodes in the original program at layer i.castSucc.
+  have h_nodes_card : Nat.card (P.toOblivious.nodes t) = Nat.card (P.nodes (⟨(t : ℕ) / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith)⟩ : Fin P.depth).castSucc) := by
+    have h_nodes_card : P.toOblivious.nodes t = { w : P.nodes (⟨(t : ℕ) / Fintype.card α, Nat.div_lt_of_lt_mul (by linarith)⟩ : Fin P.depth).castSucc // (Fintype.equivFin α (P.nodeVar w)).val ≥ (t : ℕ) % Fintype.card α } := by
+      exact obliviousNodes_unfold P t ht hk ▸ rfl
+    rw [h_nodes_card, Nat.card_congr (Equiv.subtypeUnivEquiv ?_)]
+    exact hall
+  refine le_trans (add_le_add h_nodes_card.le (toOblivious_active_le_of_all_ge P t ht hk hall)) ?_
+  exact P.width_layer_le _
+
+private lemma toOblivious_nodes_card_lt_of_exists_lt [P.Finite]
+    (t : Fin (P.depth * Fintype.card α + 1))
+    (ht : (t : ℕ) < P.depth * Fintype.card α)
+    (hk : 0 < Fintype.card α)
+    (hexists : ∃ w : P.nodes (⟨(t : ℕ) / Fintype.card α,
+      Nat.div_lt_of_lt_mul (by linarith)⟩ : Fin P.depth).castSucc,
+      (Fintype.equivFin α (P.nodeVar w)).val < (t : ℕ) % Fintype.card α) :
+    Nat.card (ObliviousNodes P t) <
+    Nat.card (P.nodes (⟨(t : ℕ) / Fintype.card α,
+      Nat.div_lt_of_lt_mul (by linarith)⟩ : Fin P.depth).castSucc) := by
+  rw [obliviousNodes_unfold P t ht hk]
+  obtain ⟨w₀, hw₀⟩ := hexists
+  exact Finite.card_subtype_lt hw₀.not_ge
+
+end width_helpers
+
 /-- The width of the oblivious branching program is at most double the width of the original:
 Intuitively, one layer L gets split into several sub-layers. At sublayer k,
 the `P.ActiveNodes` going past are present in `P.toOblivious` unchanged, and the nodes
@@ -322,9 +678,48 @@ that n' + a' ≤ n + a, because L was the widest. Now N + a is at most n' + a', 
 each of those has to either end at the next layer, or go past there there and count as
 an ActiveNode. So `N + a ≤ n' + a' ≤ n + a`, and the new width is less than
 `n + a + N ≤ 2n + a ≤ 2(n + a) = 2 * P.width`. -/
-theorem toOblivious_width_le [Fintype β] : P.toOblivious.width < 2 * P.width := by
+theorem toOblivious_width_le [Fintype β] [P.Finite] : P.toOblivious.width < 2 * P.width := by
   open toOblivious in
-  sorry
+  by_contra h_contra
+  obtain ⟨t, ht⟩ : ∃ t : Fin (P.depth * Fintype.card α + 1), Nat.card (P.toOblivious.nodes t) + Nat.card (P.toOblivious.ActiveNodes t) ≥ 2 * P.width := by
+    contrapose! h_contra
+    convert lt_of_le_of_lt (ciSup_le fun t => Nat.le_sub_one_of_lt (h_contra t)) _ using 1
+    exact Nat.sub_lt (mul_pos zero_lt_two (SkipBranchingProgram.width_pos P)) zero_lt_one
+  by_cases ht_last : (t : ℕ) < P.depth * Fintype.card α
+  · by_cases h_exists : ∃ w : P.nodes (⟨(t : ℕ) / Fintype.card α,
+      Nat.div_lt_of_lt_mul (by linarith)⟩ : Fin P.depth).castSucc,
+      (Fintype.equivFin α (P.nodeVar w)).val < (t : ℕ) % Fintype.card α
+    · generalize_proofs pf at h_exists
+      -- Apply the lemma that bounds the total number of nodes and active nodes at time `t` when there exists a node with a value less than `j`.
+      have h_bound : Nat.card (P.toOblivious.nodes t) + Nat.card (P.toOblivious.ActiveNodes t) < 2 * P.width := by
+        have := toOblivious_nodes_card_lt_of_exists_lt P t ht_last (Fintype.card_pos_iff.mpr ⟨P.nodeVar h_exists.choose⟩) h_exists
+        have := toOblivious_active_card_le P t ht_last (Fintype.card_pos_iff.mpr ⟨P.nodeVar h_exists.choose⟩)
+        have := width_layer_le P (Fin.castSucc ⟨(t : ℕ) / Fintype.card α, pf⟩)
+        have := width_layer_le P (Fin.succ ⟨(t : ℕ) / Fintype.card α, pf⟩)
+        linarith!
+      grind
+    · have h_total_le : Nat.card (P.toOblivious.nodes t) + Nat.card (P.toOblivious.ActiveNodes t) ≤ P.width := by
+        apply toOblivious_total_le_of_all_ge P t ht_last
+        · grind
+        · exact fun w => not_lt.1 fun contra => h_exists ⟨w, contra⟩
+      linarith [P.width_pos]
+  · simp only [not_lt] at ht_last
+    have ht_last_eq : t = Fin.last (P.depth * Fintype.card α) := by
+      ext1
+      linarith [Fin.is_lt t]
+    simp only [ht_last_eq] at ht ⊢
+    have h_card : Nat.card (P.toOblivious.nodes (Fin.last (P.depth * Fintype.card α))) = Nat.card (P.nodes (Fin.last P.depth)) := by
+      exact Eq.symm (by unfold SkipBranchingProgram.toOblivious; simp [ObliviousNodes])
+    simp only [h_card] at ht ⊢
+    have h_card_active : Nat.card (P.toOblivious.ActiveNodes (Fin.last (P.depth * Fintype.card α))) = 0 := by
+      rw [Nat.card_eq_zero]
+      exact Or.inl <| by
+        have := P.toOblivious.ActiveNodes_last_isEmpty
+        exact ⟨fun u => this.false u⟩
+    simp only [h_card_active, add_zero] at ht ⊢
+    have h_card_le : Nat.card (P.nodes (Fin.last P.depth)) ≤ P.width := by
+      exact le_trans (Nat.le_add_right _ _) (width_layer_le P (Fin.last P.depth)) |> le_trans (Nat.le_refl _) |> le_trans <| le_rfl
+    linarith [P.width_pos]
 
 /-- The oblivious branching program computes the same function as the original. -/
 @[simp]
