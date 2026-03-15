@@ -281,8 +281,9 @@ def evalAt (P : SkipBranchingProgram α β γ) (x : α → β) {i : Fin P.depth.
     have h_lt : i.val < P.depth := by
       have h_le : i.val ≤ P.depth := by omega
       have h_ne : i.val ≠ P.depth := by
+        clear i' u' next
         contrapose! h
-        apply Fin.eq_of_val_eq h.1
+        apply Fin.eq_of_val_eq h
       omega
     let i' : Fin P.depth := i.castPred h
     let u' : P.nodes i'.castSucc := (Fin.castSucc_castPred i h).symm ▸ u
@@ -732,7 +733,15 @@ theorem toLayered_evalAt (x : α → β) (i : Fin (P.depth + 1)) (node : P.toLay
         · exact eqRec_heq _ _
       · apply evalAt_castSucc
     · simp [toLayered]
-      grind
+      split
+      · rename_i h_eq
+        split at h_eq
+        · grind
+        · grind
+      · rename_i h_eq
+        split at h_eq
+        · grind
+        · grind
 
 /--
 The converted layered branching program computes the same function as the original skip branching program.

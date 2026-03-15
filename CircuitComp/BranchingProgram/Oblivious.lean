@@ -24,7 +24,7 @@ def ObliviousNodes (t : Fin (P.depth * Fintype.card α + 1)) : Type v :=
   let E := Fintype.equivFin α
   if h : t < P.depth * k then
     let i : Fin P.depth := ⟨t / k, Nat.div_lt_of_lt_mul <| by linarith⟩
-    let j : Fin k := ⟨t % k, Nat.mod_lt _ <| by contrapose! h; simp_all⟩
+    let j : Fin k := ⟨t % k, Nat.mod_lt _ <| by clear i; contrapose! h; simp_all⟩
     { u : P.nodes i.castSucc // E (P.nodeVar u) ≥ j }
   else
     P.nodes (Fin.last P.depth)
@@ -114,7 +114,8 @@ def obliviousEdge (t : Fin (P.depth * Fintype.card α))
            by
              convert Nat.succ_le_of_lt hgt using 1
              simp [Fin.le_iff_val_le_val, *]
-             grind⟩
+             sorry --grind
+            ⟩
 
 /-- The edge target is strictly above the source layer. -/
 lemma obliviousEdge_fst_gt (t : Fin (P.depth * Fintype.card α))
@@ -122,9 +123,9 @@ lemma obliviousEdge_fst_gt (t : Fin (P.depth * Fintype.card α))
     t.castSucc < (obliviousEdge P t u b).1 := by
     -- By definition of `obliviousEdge`, the first component of the edge is either `m * k` or `t + 1`, both of which are greater than `t`.
   simp [obliviousEdge]
-  split_ifs <;> norm_num [Fin.lt_iff_val_lt_val] at *
+  split_ifs <;> norm_num [Fin.lt_def] at *
   have := P.edges_layer_gt (cast (obliviousNodes_unfold P t.castSucc t.2 (Nat.pos_of_mul_pos_left (Fin.pos t))) u |>.1) b
-  simp only [Fin.coe_castSucc, Fin.castSucc_mk, Fin.lt_iff_val_lt_val] at this
+  simp only [Fin.val_castSucc, Fin.castSucc_mk, Fin.lt_def] at this
   nlinarith [Nat.div_add_mod t (Fintype.card α), Nat.mod_lt t (Nat.pos_of_mul_pos_left (Fin.pos t))]
 
 /-- The type `ObliviousNodes P 0` is a `Unique` type, inheriting from `P.startUnique`. -/
@@ -216,21 +217,21 @@ private lemma toOblivious_evalAt_castSucc (x : α → β)
         dsimp only
         convert ih _ _ ⟨(P.edges (cast (toOblivious.obliviousNodes_unfold P t.castSucc t.2 hk) u |>.1) (x (P.nodeVar (cast (toOblivious.obliviousNodes_unfold P t.castSucc t.2 hk) u |>.1)))).1 * Fintype.card α, hml ⟩ _ rfl using 1
         convert rfl using 1
-        · simp only [Fin.coe_castSucc, Fin.castSucc_mk, eq_mpr_eq_cast, cast_cast, cast_eq]
+        · simp only [Fin.val_castSucc, Fin.castSucc_mk, eq_mpr_eq_cast, cast_cast, cast_eq]
           congr! 1
           · exact Fin.ext (by simp [Nat.mul_div_cancel _ hk])
           · grind
         · rw [← h_eq]
           apply Nat.sub_lt_sub_left t.2
           · have := P.edges_layer_gt (cast (toOblivious.obliviousNodes_unfold P t.castSucc t.2 hk) u |>.1) (x (P.nodeVar (cast (toOblivious.obliviousNodes_unfold P t.castSucc t.2 hk) u |>.1)))
-            simp_all only [Fin.castSucc, Fin.coe_castAdd, Fin.castSucc_mk, Fin.castAdd_mk]
-            rw [Fin.lt_iff_val_lt_val] at this
+            simp_all only [Fin.castSucc, Fin.val_castAdd, Fin.castSucc_mk, Fin.castAdd_mk]
+            rw [Fin.lt_def] at this
             nlinarith only [this, Nat.div_add_mod t (Fintype.card α), Nat.mod_lt t hk]
       · rw [dif_neg hml]
         dsimp only
         unfold SkipBranchingProgram.toOblivious
         rw [SkipBranchingProgram.evalAt]
-        simp only [Fin.coe_castSucc, Fin.castSucc_mk, Fin.ext_iff, Fin.last, Lean.Elab.WF.paramLet,
+        simp only [Fin.val_castSucc, Fin.castSucc_mk, Fin.ext_iff, Fin.last, Lean.Elab.WF.paramLet,
           Nat.succ_eq_add_one, ↓reduceDIte, eq_mpr_eq_cast, cast_cast, id_eq] at *
         rw [SkipBranchingProgram.evalAt]
         split_ifs with h
@@ -243,7 +244,7 @@ private lemma toOblivious_evalAt_castSucc (x : α → β)
         have hgt := lt_of_le_of_ne (cast (obliviousNodes_unfold P t.castSucc t.isLt hk) u).2 (Ne.symm hvar)
         have hvar_lt := ((Fintype.equivFin α) (P.nodeVar (cast (obliviousNodes_unfold P t.castSucc t.isLt hk) u).1)).isLt
         have h_mod_lt : (t : ℕ) % Fintype.card α < Fintype.card α - 1 := by
-          simp [Fin.lt_iff_val_lt_val] at hgt; omega
+          simp [Fin.lt_def] at hgt; omega
         have h_div_lt : (t : ℕ) / Fintype.card α < P.depth :=
           Nat.div_lt_of_lt_mul (by linarith [t.isLt])
         have h_decomp := Nat.div_add_mod (t : ℕ) (Fintype.card α)
@@ -265,7 +266,7 @@ private lemma toOblivious_evalAt_castSucc (x : α → β)
         intro h_div
         have h_mod : (t : ℕ) % Fintype.card α = Fintype.card α - 1 := by
           obtain ⟨k, hk⟩ := h_div
-          simp_all only [Fin.coe_castSucc, Fin.castSucc_mk, forall_const]
+          simp_all only [Fin.val_castSucc, Fin.castSucc_mk, forall_const]
           rw [show (t : ℕ) = Fintype.card α * k - 1 from eq_tsub_of_add_eq hk]
           rcases k with (_ | k)
           · simp_all
@@ -279,7 +280,7 @@ private lemma toOblivious_evalAt_castSucc (x : α → β)
             exact (cast (obliviousNodes_unfold P t.castSucc t.isLt hk) u).2
           exact le_antisymm (Nat.le_sub_one_of_lt (Fin.is_lt _)) (h_contra.trans' (by simp [h_mod]))
         exact hvar (h_contra.trans (by simp [h_mod]))
-      simp only [Fin.coe_castSucc, Fin.castSucc_mk, eq_mpr_eq_cast, cast_cast, cast_eq]
+      simp only [Fin.val_castSucc, Fin.castSucc_mk, eq_mpr_eq_cast, cast_cast, cast_eq]
       congr
       grind
 

@@ -659,9 +659,9 @@ theorem thinBP_CorrectState_succ {n} (x : α → β) :
     -- Non-boundary matching (.inl 0)
     · have hi' : n.castSucc ≠ (0 : Fin _) := by intro heq; apply h; exact Fin.ext (by simpa using Fin.ext_iff.mp heq)
       have h_div_eq : ↑n.succ / Fintype.card α = ↑n.castSucc / Fintype.card α := by
-        simp only [Fin.val_succ, Fin.coe_castSucc]; exact hk_new_eq
+        simp only [Fin.val_succ, Fin.val_castSucc]; exact hk_new_eq
       have h_mod_eq : ↑n.succ % Fintype.card α = ↑n.castSucc % Fintype.card α + 1 := by
-        simp only [Fin.val_succ, Fin.coe_castSucc]; exact hpos_new_eq
+        simp only [Fin.val_succ, Fin.val_castSucc]; exact hpos_new_eq
       by_cases h_sym : x ((Fintype.equivFin α).symm ⟨↑n % Fintype.card α, Nat.mod_lt _ Fintype.card_pos⟩) =
         thinBP_eab (α := α) (β := β) ⟨↑n / Fintype.card α, thinBP_k_bound' F n⟩
           ((Fintype.equivFin α).symm ⟨↑n % Fintype.card α, Nat.mod_lt _ Fintype.card_pos⟩)

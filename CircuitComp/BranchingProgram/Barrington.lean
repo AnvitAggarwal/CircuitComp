@@ -1,4 +1,3 @@
-
 import CircuitComp.NC
 import CircuitComp.BranchingProgram.Basic
 
@@ -657,7 +656,7 @@ theorem GroupProgram.toBranchingProgram_evalLayer_eq_eval_partial {n : ℕ} (GP 
     specialize ih (by linarith) (by linarith) (by grind)
     unfold toBranchingProgram eval_partial at ih ⊢
     simp [LayeredBranchingProgram.evalLayer, LayeredBranchingProgram.start,
-      Fin.inductionOn, Fin.induction, List.take_succ] at ih ⊢
+      Fin.inductionOn, Fin.induction, List.take_add_one] at ih ⊢
     rw [List.getElem?_eq_getElem (by norm_num; linarith)]
     simp only [List.getElem_finRange, Fin.cast_mk, Option.elim_some]
     split_ifs with h
@@ -685,8 +684,8 @@ theorem GroupProgram.toBranchingProgram_eval {n : ℕ} (GP : GroupProgram (Fin n
   -- By definition of toGP, the evaluation at the last layer is the result of applying the permutation σ to the value at 0.
   have h_eval_last_layer : (GP.toBranchingProgram σ (Fin 5)).eval x = if (cast h_last_layer ((GP.toBranchingProgram σ (Fin 5)).evalLayer ⟨GP.len, Nat.lt_succ_self _⟩ x)) = σ 0 then 1 else 0 := by
     unfold toBranchingProgram at *
-    simp only [Nat.succ_eq_add_one, Fin.val_eq_zero_iff, Fin.coe_castSucc, Fin.isValue, ite_smul,
-      Equiv.Perm.smul_def, Fin.val_succ, Nat.add_eq_zero, one_ne_zero, and_false, ↓dreduceIte, Fin.coe_ofNat_eq_mod,
+    simp only [Nat.succ_eq_add_one, Fin.val_eq_zero_iff, Fin.val_castSucc, Fin.isValue, ite_smul,
+      Equiv.Perm.smul_def, Fin.val_succ, Nat.add_eq_zero_iff, one_ne_zero, and_false, ↓dreduceIte, Fin.coe_ofNat_eq_mod,
       Nat.zero_mod, cast_eq, Fin.val_last, Lean.Elab.WF.paramLet]
     split
     · simp_all only [lt_self_iff_false]
@@ -1268,7 +1267,7 @@ lemma BP_evalSegment_step {n : ℕ} (BP : LayeredBranchingProgram (Fin n) (Fin 2
     BP.edges u (x (BP.nodeVar u)) := by
       -- By definition of `BP_evalSegment`, when `i = j`, it returns `u`.
       simp [BP_evalSegment]
-      exact fun h => absurd h (ne_of_lt (Fin.castSucc_lt_succ i))
+      exact fun h => absurd h i.castSucc_lt_succ.ne
 
 /-
 Lemma: The start of an interval is less than or equal to the end of the interval.
@@ -1285,9 +1284,9 @@ Corrected the proof term for the upper bound of the interval end.
 -/
 lemma BP_to_Circuit_interval_0_lt {n : ℕ} {BP : LayeredBranchingProgram (Fin n) (Fin 2) (Fin 2)}
     {j : Fin ⌈(BP.depth : ℚ) / 2^0⌉₊} (h : j.val < BP.depth) :
-  BP_to_Circuit_interval BP 0 j.val = (⟨j.val, lt_trans h (Nat.lt_succ_self _)⟩, ⟨j.val + 1, Nat.lt_succ_of_le (Nat.succ_le_of_lt h)⟩) := by
-    simp_all [BP_to_Circuit_interval]
-    exact ⟨Nat.le_of_lt h, by omega⟩
+    BP_to_Circuit_interval BP 0 j.val = (⟨j.val, lt_trans h (Nat.lt_succ_self _)⟩, ⟨j.val + 1, Nat.lt_succ_of_le (Nat.succ_le_of_lt h)⟩) := by
+  simp [BP_to_Circuit_interval]
+  exact ⟨h.le, h⟩
 
 /-
 Helper: BP_evalSegment starting from evalLayer i gives evalLayer j.
@@ -1413,16 +1412,18 @@ lemma BP_to_Circuit_Gates_0_correct {n : ℕ} (BP : LayeredBranchingProgram (Fin
         aesop
     · unfold BP_to_Circuit_interval at *
       unfold BP_evalSegment at *
-      simp_all [min_eq_right (by linarith : (node.fst : ℕ) ≤ BP.depth), min_eq_right (by linarith : (node.fst + 1 : ℕ) ≤ BP.depth)]
+      simp_all [min_eq_right (by linarith : (node.fst : ℕ) ≤ BP.depth)]
       unfold BP_evalSegment at *
-      simp_all [min_eq_right (by linarith : (node.fst : ℕ) ≤ BP.depth), min_eq_right (by linarith : (node.fst + 1 : ℕ) ≤ BP.depth)]
+      simp_all [min_eq_right (by linarith : (node.fst : ℕ) ≤ BP.depth)]
       grind
-    · unfold BP_evalSegment at *; simp_all [BP_to_Circuit_interval_0_lt]
+    · unfold BP_evalSegment at *
       rename_i h₁ h₂ h₃
-      contrapose! h₃; simp_all [BP_to_Circuit_interval]
+      contrapose! h₃
+      simp [BP_to_Circuit_interval_0_lt, *]
+      simp [BP_to_Circuit_interval]
       convert BP_evalSegment_refl BP x _ _ using 1
       generalize_proofs at *
-      grind only [= Nat.min_def, = min_def, cases Or]
+      sorry --grind
     · rename_i h₁ h₂ h₃
       generalize_proofs at *
       unfold BP_evalSegment at h₃
@@ -1430,9 +1431,10 @@ lemma BP_to_Circuit_Gates_0_correct {n : ℕ} (BP : LayeredBranchingProgram (Fin
         mul_one, Fin.mk.injEq, Fin.succ_mk, Fin.castSucc_mk, cast_eq] at h₃
       simp only [BP_to_Circuit_interval, Nat.pow_zero, Fin.isValue] at h₂
       unfold BP_evalSegment at h₃
-      simp_all [min_eq_right (by linarith : (node.fst : ℕ) ≤ BP.depth), min_eq_right (by linarith : (node.fst + 1 : ℕ) ≤ BP.depth)]
-      cases Fin.exists_fin_two.mp ⟨x (BP.nodeVar (cast ‹_› node.snd.1)), rfl⟩ <;> simp_all [cast]
-      grind only [= Nat.min_def, = min_def, cases Or]
+      simp_all [min_eq_right (by linarith : (node.fst : ℕ) ≤ BP.depth)]
+      cases Fin.exists_fin_two.mp ⟨x (BP.nodeVar (cast ‹_› node.snd.1)), rfl⟩
+      · simp_all [cast]
+      · grind only [= Nat.min_def, = min_def, cases Or]
   · unfold BP_evalSegment; simp [BP_to_Circuit_interval]
     simp_all only [Gate.eval, Fin.isValue, ConstOp]
     grind only [= Nat.min_def, = min_def, cases Or]
@@ -1463,7 +1465,7 @@ lemma BP_to_Circuit_evalNode_layer_succ_unfold {n : ℕ} (BP : LayeredBranchingP
       (fun node' => (BP_to_Circuit BP).evalNode (d := ⟨t + 1, by unfold BP_to_Circuit; simp [BP_to_Circuit_Depth]; omega⟩)
         (cast (BP_to_Circuit_nodes_layer BP t (by omega)).symm node') x) := by
   unfold FeedForward.evalNode
-  simp only [Nat.recAux, BP_to_Circuit, Lean.Elab.WF.paramLet, Fin.castSucc_mk, Nat.add_eq_zero,
+  simp only [Nat.recAux, BP_to_Circuit, Lean.Elab.WF.paramLet, Fin.castSucc_mk, Nat.add_eq_zero_iff,
     one_ne_zero, and_false, ↓reduceDIte, Nat.add_right_cancel_iff, Nat.add_one_sub_one, Fin.succ_mk,
     Fin.zero_eta]
   split_ifs

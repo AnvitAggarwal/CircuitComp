@@ -284,15 +284,16 @@ theorem exists_good_approxOr (vars width ℓ : ℕ)
     obtain ⟨ S, hS ⟩ := h_prob;
     use S;
     refine le_trans ?_ ( hS.trans ?_ );
-    · gcongr;
-      intro x hx; by_cases hx' : ( fun i => MvPolynomial.eval ( fun i => ( x i : ZMod 3 ) ) ( polys i ) ) = 0 <;> simp_all [ funext_iff ] ;
+    · gcongr with x _
+      intro hx
+      by_cases hx' : ( fun i => MvPolynomial.eval ( fun i => ( x i : ZMod 3 ) ) ( polys i ) ) = 0 <;> simp_all [ funext_iff ] ;
       · exact False.elim <| hx <| by unfold approxOr_val OR_val; norm_num;
       · exact Finset.mem_filter.mpr ⟨ Finset.mem_univ _, fun h => hx' |> fun ⟨ i, hi ⟩ => hi <| by simpa using congr_fun h i ⟩;
     · exact le_trans ( Finset.card_le_univ _ ) ( by norm_num [ Finset.card_univ ] );
   obtain ⟨ S, hS ⟩ := h_prob;
   have h_card : (Finset.univ.filter (fun x : Fin vars → Fin 2 => approxOr_val (fun i => MvPolynomial.eval (fun i => (x i : ZMod 3)) (polys i)) S = OR_val (fun i => MvPolynomial.eval (fun i => (x i : ZMod 3)) (polys i)))).card ≥ (2^vars : ℚ) - (2^vars : ℚ) / 2^ℓ := by
     rw [ sub_div', ge_iff_le, div_le_iff₀ ] <;> norm_cast;
-    · rw [ Int.subNatNat_eq_coe ] ; push_cast ; nlinarith [ show 0 < 2 ^ ℓ by positivity, show 0 < 2 ^ vars by positivity, show Finset.card ( Finset.filter ( fun x : Fin vars → Fin 2 => approxOr_val ( fun i => MvPolynomial.eval ( fun i => ( x i : ZMod 3 ) ) ( polys i ) ) S = OR_val ( fun i => MvPolynomial.eval ( fun i => ( x i : ZMod 3 ) ) ( polys i ) ) ) Finset.univ ) + Finset.card ( Finset.filter ( fun x : Fin vars → Fin 2 => ¬approxOr_val ( fun i => MvPolynomial.eval ( fun i => ( x i : ZMod 3 ) ) ( polys i ) ) S = OR_val ( fun i => MvPolynomial.eval ( fun i => ( x i : ZMod 3 ) ) ( polys i ) ) ) Finset.univ ) = 2 ^ vars from by rw [ Finset.filter_card_add_filter_neg_card_eq_card ] ; norm_num [ Finset.card_univ ] ];
+    · rw [ Int.subNatNat_eq_coe ] ; push_cast ; nlinarith [ show 0 < 2 ^ ℓ by positivity, show 0 < 2 ^ vars by positivity, show Finset.card ( Finset.filter ( fun x : Fin vars → Fin 2 => approxOr_val ( fun i => MvPolynomial.eval ( fun i => ( x i : ZMod 3 ) ) ( polys i ) ) S = OR_val ( fun i => MvPolynomial.eval ( fun i => ( x i : ZMod 3 ) ) ( polys i ) ) ) Finset.univ ) + Finset.card ( Finset.filter ( fun x : Fin vars → Fin 2 => ¬approxOr_val ( fun i => MvPolynomial.eval ( fun i => ( x i : ZMod 3 ) ) ( polys i ) ) S = OR_val ( fun i => MvPolynomial.eval ( fun i => ( x i : ZMod 3 ) ) ( polys i ) ) ) Finset.univ ) = 2 ^ vars from by rw [ Finset.card_filter_add_card_filter_not ] ; norm_num [ Finset.card_univ ] ];
     · positivity;
     · positivity;
   use S
@@ -431,7 +432,8 @@ lemma exists_poly_approx_step {n ℓ : ℕ}
     have h_union_bound : (⋃ u, Bad u).ncard ≤ (Nat.card (circ.nodes d.succ)) * (2 ^ n * (2 : ℚ) ^ (-ℓ : ℤ)) := by
       convert ncard_union_bound Bad _ _ using 1;
       exact fun u => hBad u |>.1;
-    norm_num [ mul_assoc ] at * ; linarith;
+    norm_num [ mul_assoc ] at *
+    linarith
   · intro x hx u;
     -- By definition of `evalNode`, we have:
     have h_evalNode : circ.evalNode u x = (circ.gates d u).op.func (fun i => circ.evalNode ((circ.gates d u).inputs i) x) := by
@@ -441,13 +443,16 @@ lemma exists_poly_approx_step {n ℓ : ℕ}
     · congr! 2;
       congr! 2;
       specialize h_eval x hx.1 ( ( circ.gates d u ).inputs ‹_› );
-      split_ifs <;> simp_all [ ← h_eval ];
-      · exact Fin.ext ( by erw [ ZMod.natCast_eq_natCast_iff ] at *; norm_num [ Nat.ModEq ] at *; omega );
-      · exact Fin.ext ( by have := Fin.is_lt ( circ.evalNode ( ( circ.gates d u ).inputs ‹_› ) x ) ; interval_cases ( circ.evalNode ( ( circ.gates d u ).inputs ‹_› ) x : ℕ ) <;> trivial );
+      split_ifs with h
+      · simp [ ← h_eval ] at h
+        exact Fin.ext ( by erw [ ZMod.natCast_eq_natCast_iff ] at *; norm_num [ Nat.ModEq ] at *; omega );
+      · simp [ ← h_eval ] at h
+        exact Fin.ext ( by have := Fin.is_lt ( circ.evalNode ( ( circ.gates d u ).inputs ‹_› ) x ) ; interval_cases ( circ.evalNode ( ( circ.gates d u ).inputs ‹_› ) x : ℕ ) <;> trivial );
     · intro i
       rw [← h_eval x hx.1 ( circ.gates d u |>.inputs i )]
-      cases Fin.exists_fin_two.mp ⟨circ.evalNode ( circ.gates d u |>.inputs i ) x, rfl⟩
-      <;> simp [*]
+      rcases Fin.exists_fin_two.mp ⟨circ.evalNode ( circ.gates d u |>.inputs i ) x, rfl⟩ with h | h
+      · simp [h]
+      · simp [h]
 
 lemma exists_poly_approx_base {n ℓ : ℕ}
     (circ : FeedForward (Fin 2) (Fin n) Unit) :
@@ -487,7 +492,8 @@ theorem exists_poly_approx_of_layer {n ℓ : ℕ}
     obtain ⟨ Polys', hPolys₁', x', hx₁', hx₂' ⟩ := exists_poly_approx_step circ h_finite h_gates _ Polys x hPolys₁ hx₂;
     refine' ⟨ Polys', _, hPolys₁', _, hx₂' ⟩ <;> norm_num [ pow_succ' ] at *;
     · assumption;
-    · convert le_trans hx₁' ( add_le_add_right hx₁ _ ) using 1 ; ring!
+    · convert le_trans hx₁' ( add_le_add_left hx₁ _ ) using 1
+      ring!
 
 end AristotleLemmas
 
@@ -738,13 +744,16 @@ lemma totalDegree_affine_transform {n : ℕ} (P : MvPolynomial (Fin n) (ZMod 3))
     contrapose! hb
     erw [ MvPolynomial.coeff_X', MvPolynomial.coeff_one ] at *
     aesop
-  · convert totalDegree_aeval_linear (fun i => -MvPolynomial.X i - 1) _ _ using 1;
+  · convert totalDegree_aeval_linear (fun i => -MvPolynomial.X i - (1 : MvPolynomial (Fin n) (ZMod 3))) _ _ using 1;
     · convert rfl;
-      induction P using MvPolynomial.induction_on <;> aesop
+      induction P using MvPolynomial.induction_on
+      · simp
+      · aesop
+      · aesop
     · intro i
       norm_num [ MvPolynomial.totalDegree ]
       intro b hb
-      erw [ MvPolynomial.coeff_X', MvPolynomial.coeff_one ] at hb
+      rw [ MvPolynomial.coeff_X', MvPolynomial.coeff_one ] at hb
       aesop
 
 /-- We'll show that parity cannot be computed by a low-degree polymomial mod 3. First,
@@ -881,8 +890,8 @@ lemma card_multilinear_monomials_le (n k : ℕ) :
   · rw [ show Finset.filter ( fun s => Finset.card s ≤ k ) ( Finset.powerset ( Finset.univ : Finset ( Fin n ) ) ) = Finset.biUnion ( Finset.range ( k + 1 ) ) fun i => Finset.powersetCard i ( Finset.univ : Finset ( Fin n ) ) from ?_, Finset.card_biUnion ];
     · simp [ Finset.card_univ ];
     · exact fun i hi j hj hij => Finset.disjoint_left.mpr fun x hx₁ hx₂ => hij <| by rw [ Finset.mem_powersetCard ] at hx₁ hx₂; aesop;
-    · ext; simp [Finset.mem_biUnion, Finset.mem_powersetCard];
-      rw [ Nat.lt_succ_iff ];
+    · ext
+      simp [Finset.mem_biUnion, Finset.mem_powersetCard];
   · intro s t h; ext x; replace h := congr_arg ( fun m => m x ) h; simp_all [ Finsupp.single_apply ] ;
     split_ifs at h <;> tauto
 
@@ -904,7 +913,7 @@ lemma finite_multilinear_exponents (n k : ℕ) :
     · simp at h_support_top ⊢
       exact Or.inl ⟨m.support, h, h_support_top.symm⟩
     · simp at h_support_top ⊢
-      exact Or.inr ⟨_, h, _, rfl, h_support_top.symm⟩
+      exact Or.inr ⟨_, h, h_support_top.symm⟩
   refine Set.Finite.subset ( Set.Finite.union ( Set.Finite.image _ <| Set.toFinite _ ) <| Set.Finite.biUnion ( Set.finite_lt_nat k ) fun i hi => Set.Finite.image _ <| Set.toFinite _ ) fun m hm => h_finite_support m hm
 
 lemma card_le_of_polynomial_span {n : ℕ} (S : Set (Fin n → ZMod 3)) (k : ℕ)
@@ -916,7 +925,7 @@ lemma card_le_of_polynomial_span {n : ℕ} (S : Set (Fin n → ZMod 3)) (k : ℕ
   -- Let `ExponentsSet` be `{ m : Fin n →₀ ℕ | (∀ i, m i ≤ 1) ∧ m.support.card ≤ k }`.
   set ExponentsSet : Set (Fin n →₀ ℕ) := { m : Fin n →₀ ℕ | (∀ i, m i ≤ 1) ∧ m.support.card ≤ k };
   -- By `finite_multilinear_exponents`, this set is finite, so let `Exponents` be its `toFinset`.
-  obtain ⟨Exponents, hExponents⟩ : ∃ Exponents : Finset (Fin n →₀ ℕ), Exponents.toSet = ExponentsSet ∧ Exponents.card = ∑ i ∈ Finset.range (k + 1), Nat.choose n i := by
+  obtain ⟨Exponents, hExponents⟩ : ∃ Exponents : Finset (Fin n →₀ ℕ), Exponents = ExponentsSet ∧ Exponents.card = ∑ i ∈ Finset.range (k + 1), Nat.choose n i := by
     have h_finset : Set.Finite ExponentsSet ∧ ExponentsSet.ncard = ∑ i ∈ Finset.range (k + 1), Nat.choose n i := by
       exact ⟨ finite_multilinear_exponents n k, card_multilinear_monomials_le n k ⟩;
     exact ⟨ h_finset.1.toFinset, by simp, by simpa [ ← Set.ncard_coe_finset ] using h_finset.2 ⟩;
@@ -987,7 +996,10 @@ lemma multilinear_monomial_reduction {n : ℕ} (Q : MvPolynomial (Fin n) (ZMod 3
     refine' ⟨ Q * MvPolynomial.monomial ( ∑ i ∈ Finset.univ \ m.support, Finsupp.single i 1 ) 1, _, _ ⟩;
     · grw [MvPolynomial.totalDegree_mul]
       simp [MvPolynomial.totalDegree_monomial ];
-      rw [ add_comm, Finsupp.sum_sum_index' ] <;> simp_all
+      rw [ add_comm, ← Finsupp.sum_finset_sum_index ]
+      · simp [*]
+      · simp
+      · simp
     · intro x hx
       simp [hx, h_approx, MvPolynomial.eval_monomial, ← Finset.prod_mul_distrib, Finsupp.single_apply]
       congr! 1 with i

@@ -7,6 +7,7 @@ import Mathlib.Computability.Ackermann
 import Mathlib.Analysis.Complex.ExponentialBounds
 import Mathlib.Topology.Algebra.Order.Floor
 
+import Mathlib.Tactic.IntervalCases
 import Mathlib.Tactic.Peel
 import Mathlib.Tactic.Bound
 
@@ -574,8 +575,7 @@ instance : LawfulGrowthRate quasilinear where
     obtain ⟨C, hC⟩ := hf
     use C
     have h_comp : (fun n ↦ (f (g n) : ℤ)) =O[.atTop] (fun n ↦ (g n * (Nat.log 2 (g n)) ^ C : ℤ) + 1) := by
-      convert GrowthRate.isBigO_comp_bound_plus_const hC g using 1
-      norm_cast
+      exact GrowthRate.isBigO_comp_bound_plus_const hC g
     have h_comp_bound : (fun n ↦ ((g n) * (Nat.log 2 (g n)) ^ C : ℤ)) =O[.atTop] (fun n ↦ (n * (Nat.log 2 n) ^ C : ℤ)) := by
       exact isBigO_quasilinear_bound_comp_le_id C g hg
     have h_comp_bound_plus_one : (fun n ↦ ((g n) * (Nat.log 2 (g n)) ^ C : ℤ) + 1) =O[.atTop] (fun n ↦ (n * (Nat.log 2 n) ^ C : ℤ)) := by
@@ -765,8 +765,7 @@ instance : LawfulGrowthRate exp where
       have h_f_g_final : f ∘ g ∈ bigO (fun n ↦ C ^ n) := by
         apply_rules [Asymptotics.IsBigO.trans]
       use C
-      convert h_f_g_final using 1
-      unfold GrowthRate.bigO; aesop
+      exact h_f_g_final
     · -- Since C is not greater than or equal to 1, we have C = 0.
       have hC_zero : C = 0 := by
         exact Nat.eq_zero_of_not_pos hC_ge_1
@@ -1975,7 +1974,8 @@ theorem e_pow_ssubset_exp : e_pow ⊂ exp := by
   simp only [e_pow, bigO, Set.mem_setOf_eq, Nat.cast_pow, Nat.cast_ofNat]
   intro h
   rw [Asymptotics.isBigO_iff'] at h
-  contrapose! h
+  contrapose h
+  simp_rw [not_exists, not_and]
   intro c _
   have h_exp : Filter.Tendsto (fun x : ℕ ↦ (3 ^ x : ℝ) / ⌈(Real.exp x)⌉₊) Filter.atTop Filter.atTop := by
     have h_exp_approx : ∀ n : ℕ, (3 ^ n : ℝ) / ⌈(Real.exp n)⌉₊ ≥ (3 / Real.exp 1) ^ n / 2 := by
@@ -2008,7 +2008,8 @@ theorem exp_subset_primitiveRecursive : exp ⊆ primitiveRecursive := by
 theorem factorial_not_mem_exp : Nat.factorial ∉ exp := by
   rintro ⟨c, hc⟩
   rw [Asymptotics.isBigO_iff] at hc
-  contrapose! hc
+  contrapose hc
+  simp_rw [not_exists]
   simp only [Filter.eventually_atTop, not_exists, not_forall]
   intro y z
   -- We'll use the exponential property: the factorial grows faster than any exponential function.
@@ -2968,7 +2969,7 @@ theorem computable_comp (hf : f ∈ computable) (hg : g ∈ computable) :
   refine ⟨H, ?_, ?_⟩
   · exact (computable_affine _ _).comp <| hF₁.comp <| (computable_affine _ _).comp hg'
   have hfg_le_H : ∀ n, f (g n) ≤ H n := by
-    exact fun n ↦ le_trans (hC₂ _) (by exact add_le_add_right (mul_le_mul_of_nonneg_left (hF₂.1 (hC₁ _)) (Nat.zero_le _)) _)
+    exact fun n ↦ le_trans (hC₂ _) (by exact add_le_add_left (mul_le_mul_of_nonneg_left (hF₂.1 (hC₁ _)) (Nat.zero_le _)) _)
   simp_rw [bigO, Set.mem_setOf_eq, Asymptotics.isBigO_iff, Filter.eventually_atTop]
   use 1, 0
   exact fun n hn ↦ by simpa using hfg_le_H n
