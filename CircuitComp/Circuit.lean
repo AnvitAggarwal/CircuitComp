@@ -223,7 +223,7 @@ theorem comp_size (g : FeedForward α b c) (f : FeedForward α a b) [f.Finite] [
       Nat.card (Σ d : Fin g.depth, (g.comp f).nodes (d.natAdd f.depth).succ) := by
     simp [Nat.card_sigma, Fin.sum_univ_add]
   convert h_split_sum using 2
-  · simp [comp, Nat.succ_le_iff, Fin.succ]
+  · simp [comp, Fin.succ]
   · simp [comp, add_assoc, Fin.succ]
 
 /--
@@ -238,23 +238,23 @@ theorem evalNode_comp_left {α : Type u} {a b c : Type v}
     (G.comp F).evalNode (d := k) (cast (by
       exact Eq.symm (show (G.comp F).nodes k = F.nodes i by simp +zetaDelta [comp]; intro h; linarith [Fin.is_lt i])) node) x = F.evalNode node x := by
   all_goals generalize_proofs at *;
-  simp_all +decide [ FeedForward.evalNode, FeedForward.comp ];
+  simp_all [ FeedForward.evalNode, FeedForward.comp ];
   rw [ Nat.recAux, Nat.recAux ];
-  induction i using Fin.inductionOn <;> simp +decide [ * ];
-  · grind;
-  · unfold FeedForward.Gate.eval at *
-    simp_all only [Fin.coe_castSucc, Fin.val_succ]
-    rename_i pf pf_1 a_1 pf_2
+  induction i using Fin.inductionOn
+  · simp
+  · simp only [Fin.val_succ, Fin.is_lt, ↓reduceDIte, Fin.eta,
+      cast_cast, cast_eq]
+    unfold FeedForward.Gate.eval at *
+    simp_all only [Fin.val_succ]
+    rename_i a_1 pf pf_1 pf_2
     unfold FeedForward.comp at *
     simp_all [↓reduceDIte]
-    split at pf_2
-    · congr!;
-      · grind +ring;
-      · convert a_1 _ _ _
-        grind
-        exact Nat.lt_of_succ_lt pf;
-        exact rfl;
+    congr!;
     · grind
+    · convert a_1 _ _ _
+      · grind
+      · omega
+      · exact rfl;
 
 @[simp]
 theorem evalNode_zero (F : FeedForward α inp out)
@@ -496,7 +496,7 @@ theorem inputDeps_card_le {d : Fin (F.depth + 1)} (node : F.nodes d) (k : ℕ)
   induction d using Fin.inductionOn
   · simp
   rename_i i a
-  simp only [Fin.coe_castSucc, Fin.val_succ] at a ⊢
+  simp only [Fin.val_castSucc, Fin.val_succ] at a ⊢
   rcases h_fanin i node with ⟨ h₁, h₂ ⟩;
   have h_card_union : (Set.ncard (⋃ j : (F.gates i node).op.ι, F.inputDeps i.castSucc ((F.gates i node).inputs j))) ≤ (Nat.card (F.gates i node).op.ι) * k ^ (i : ℕ) := by
     have h_card_union : ∀ (s : Finset (F.gates i node).op.ι), (Set.ncard (⋃ j ∈ s, F.inputDeps i.castSucc ((F.gates i node).inputs j))) ≤ s.card * k ^ (i : ℕ) := by

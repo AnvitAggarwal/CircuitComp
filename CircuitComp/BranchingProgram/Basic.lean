@@ -52,7 +52,7 @@ structure BranchingProgram (α : Type u) (β : Type v) (γ : Type w) where
   /-- The relation `child` is well-founded, ensuring no infinite paths. -/
   wellFounded : WellFounded (fun v u ↦ ∃ var next val, info u = .inr (var, next) ∧ next val = v)
 
-/-
+/--
 A `SkipBranchingProgram` is similar to `LayeredBranchingProgram`, but allows for skipping layers:
 a node at layer `n` can skip to any layer `m` with `n < m`. This is largely equivalent
 computationally, but allows for a reduction in width in some cases.
@@ -281,8 +281,9 @@ def evalAt (P : SkipBranchingProgram α β γ) (x : α → β) {i : Fin P.depth.
     have h_lt : i.val < P.depth := by
       have h_le : i.val ≤ P.depth := by omega
       have h_ne : i.val ≠ P.depth := by
+        clear i' u' next
         contrapose! h
-        apply Fin.eq_of_val_eq h.1
+        apply Fin.eq_of_val_eq h
       omega
     let i' : Fin P.depth := i.castPred h
     let u' : P.nodes i'.castSucc := (Fin.castSucc_castPred i h).symm ▸ u
@@ -321,7 +322,14 @@ be made 1 without much difficulty, by increasing depth), but the count of nodes 
 that layer by - this reflects the notion of width most naturally corresponding to
 `LayeredBranchingProgram.width`, and is the quantity preserved by `SkipBranchingProgram.toLayered`. -/
 def width : ℕ :=
-  ⨆ i : Fin (P.depth + 1), Nat.card (P.ActiveNodes i)
+  ⨆ i : Fin (P.depth + 1), Nat.card (P.nodes i) + Nat.card (P.ActiveNodes i)
+
+lemma width_pos : 0 < P.width := by
+  by_contra h_neg
+  have h_card_nodes_zero : ∀ i : Fin (P.depth + 1), Nat.card (P.nodes i) + Nat.card (P.ActiveNodes i) = 0 := by
+    exact fun i => le_antisymm (le_trans (le_ciSup (Finite.bddAbove_range fun i => Nat.card (P.nodes i) + Nat.card (P.ActiveNodes i)) i) (le_of_not_gt h_neg)) (Nat.zero_le _)
+  specialize h_card_nodes_zero 0
+  simp_all [Nat.card_eq_zero]
 
 end SkipBranchingProgram
 
@@ -592,6 +600,28 @@ theorem toSkip_start :
     P.toSkip.start.val = P.start :=
   rfl
 
+omit [Fintype P.nodes] in
+lemma evalAt_internal' (x : α → β) (u : P.nodes) (var : α) (next : β → P.nodes)
+    (h : P.info u = .inr (var, next)) :
+    P.evalAt x u = P.evalAt x (next (x var)) := by
+  unfold BranchingProgram.evalAt
+  rw [WellFounded.fix_eq]
+  split <;> simp_all
+  obtain ⟨rfl, rfl⟩ := h
+  rfl
+
+lemma toSkip_edges_val_internal {i : Fin P.depth} (u : P.toSkip.nodes i.castSucc) (b : β)
+    (var : α) (next : β → P.nodes) (hinfo : P.info u.val = .inr (var, next)) :
+    (P.toSkip.edges u b).2.val = next b := by
+  simp only [BranchingProgram.toSkip]
+  split <;> simp_all
+
+lemma toSkip_nodeVar_internal {i : Fin P.depth} (u : P.toSkip.nodes i.castSucc)
+    (var : α) (next : β → P.nodes) (hinfo : P.info u.val = .inr (var, next)) :
+    P.toSkip.nodeVar u = var := by
+  simp only [BranchingProgram.toSkip]
+  split <;> simp_all
+
 theorem toSkip_evalAt
     (x : α → β) (i : Fin P.depth.succ) (u : P.toSkip.nodes i) :
     P.toSkip.evalAt x u = P.evalAt x u.1 := by
@@ -607,7 +637,21 @@ theorem toSkip_evalAt
     rw [ WellFounded.fix_eq ];
     unfold toSkip; aesop;
   · convert ih _ _ _ _ rfl using 1;
-    · sorry
+    · -- Need: P.evalAt x ↑u = P.evalAt x ↑(P.toSkip.edges (⋯ ▸ u) (x (P.toSkip.nodeVar (⋯ ▸ u)))).snd
+      -- Since i ≠ last, u is internal
+      have hi_lt : (i : ℕ) < P.depth := by
+        exact lt_of_le_of_ne (Fin.le_last _) (by simpa [Fin.ext_iff] using h)
+      have h_height_pos : 0 < P.height u.val := by
+        rw [u.2.1]; omega
+      obtain ⟨var, next, hinfo⟩ := P.is_internal_of_height_pos u.val h_height_pos
+      rw [evalAt_internal' P x u.val var next hinfo]
+      congr 1
+      -- Now need: next (x var) = ↑(P.toSkip.edges (⋯ ▸ u) (x (P.toSkip.nodeVar (⋯ ▸ u)))).snd
+      have hi_cast : i = (i.castPred h).castSucc := (Fin.castSucc_castPred i h).symm
+      have hinfo' : P.info ((hi_cast ▸ u : P.toSkip.nodes (i.castPred h).castSucc)).val = .inr (var, next) := by
+        cases hi_cast; exact hinfo
+      rw [toSkip_nodeVar_internal P _ var next hinfo']
+      rw [toSkip_edges_val_internal P _ _ var next hinfo']
     · rw [ ← n ];
       apply Nat.sub_lt_sub_left
       · exact lt_of_le_of_ne ( Fin.le_last _ ) ( by simpa [ Fin.ext_iff ] using h );
@@ -696,7 +740,15 @@ theorem toLayered_evalAt (x : α → β) (i : Fin (P.depth + 1)) (node : P.toLay
         · exact eqRec_heq _ _
       · apply evalAt_castSucc
     · simp [toLayered]
-      grind
+      split
+      · rename_i h_eq
+        split at h_eq
+        · grind
+        · grind
+      · rename_i h_eq
+        split at h_eq
+        · grind
+        · grind
 
 /--
 The converted layered branching program computes the same function as the original skip branching program.
@@ -706,5 +758,21 @@ theorem toLayered_eval : P.toLayered.eval = P.eval := by
   ext x
   rw [← P.toLayered.evalAt_evalLayer_eq_eval x 0]
   exact P.toLayered_evalAt x 0 (Sum.inl P.start)
+
+@[simp]
+theorem toLayered_width [P.Finite] : P.toLayered.width = P.width := by
+  simp only [ActiveNodes, ← Nat.card_sum, toLayered,
+    SkipBranchingProgram.width, LayeredBranchingProgram.width]
+
+theorem IsOblivious.toLayered (h : P.IsOblivious) : P.toLayered.IsOblivious := by
+  rintro i (j | ⟨j, hj⟩) (k | ⟨k, hk⟩)
+  · exact h i j k
+  · simp only [SkipBranchingProgram.toLayered]
+    rw [dif_pos ⟨j⟩]
+    exact h i j _
+  · simp only [SkipBranchingProgram.toLayered]
+    rw [dif_pos ⟨k⟩]
+    exact h i _ k
+  · rfl
 
 end SkipBranchingProgram

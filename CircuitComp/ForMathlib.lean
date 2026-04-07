@@ -44,7 +44,8 @@ lemma sum_choose_half_le (n : ℕ) :
   · -- By symmetry of binomial coefficients, we have $\sum_{i=0}^{k} \binom{2k+1}{i} = \sum_{i=k+1}^{2k+1} \binom{2k+1}{i}$.
     have h_symm : ∑ i ∈ Finset.range (k + 1), (Nat.choose (2 * k + 1) i : ℝ) = ∑ i ∈ Finset.Ico (k + 1) (2 * k + 2), (Nat.choose (2 * k + 1) i : ℝ) := by
       rw [ Finset.sum_Ico_eq_sum_range ];
-      rw [ show 2 * k + 2 - ( k + 1 ) = k + 1 by rw [ Nat.sub_eq_of_eq_add ] ; ring ] ; rw [ ← Finset.sum_flip ] ; simp +arith [ two_mul, add_assoc ];
+      rw [ show 2 * k + 2 - ( k + 1 ) = k + 1 by rw [ Nat.sub_eq_of_eq_add ] ; ring ]
+      rw [ ← Finset.sum_flip ]
       exact Finset.sum_congr rfl fun x hx => by rw [ Nat.choose_symm_of_eq_add ] ; linarith [ Nat.sub_add_cancel ( Finset.mem_range_succ_iff.mp hx ) ] ;
     -- Adding these two sums, we get the sum of all binomial coefficients of $2k+1$, which is $2^{2k+1}$.
     have h_sum : ∑ i ∈ Finset.range (k + 1), (Nat.choose (2 * k + 1) i : ℝ) + ∑ i ∈ Finset.Ico (k + 1) (2 * k + 2), (Nat.choose (2 * k + 1) i : ℝ) = 2 ^ (2 * k + 1) := by

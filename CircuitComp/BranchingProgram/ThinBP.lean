@@ -170,6 +170,13 @@ lemma thinBP_match_succ (k : Fin (Fintype.card β ^ Fintype.card α)) (pos : ℕ
   · exact fun h j ↦ by cases j using Fin.lastCases <;> simp [*]
 
 omit [Nonempty α] [Nonempty β] in
+private lemma thinBP_match_congr {k1 k2 : Fin (Fintype.card β ^ Fintype.card α)} {pos1 pos2 : ℕ}
+    {h1 : pos1 ≤ Fintype.card α} {h2 : pos2 ≤ Fintype.card α} {x : α → β}
+    (hk : k1 = k2) (hp : pos1 = pos2) :
+    thinBP_match k1 pos1 h1 x ↔ thinBP_match k2 pos2 h2 x := by
+  subst hk; subst hp; rfl
+
+omit [Nonempty α] [Nonempty β] in
 lemma thinBP_match_card (k : Fin (Fintype.card β ^ Fintype.card α)) (x : α → β) :
     thinBP_match k (Fintype.card α) (by omega) x ↔ thinBP_index x = k := by
   constructor <;> intro h
@@ -336,6 +343,144 @@ theorem thinBP_CorrectState_one (x : α → β) :
         · ext1
           simp [Unique.eq_default, ← h]
 
+/- Edge transition lemmas for thinBP -/
+
+private lemma thinBP_nodes_eq' (i : Fin ((thinBP F).depth + 1)) (hi : i ≠ 0) :
+    (thinBP F).nodes i = ULift (Fin 2 ⊕ Fin (Fintype.card γ - 1)) := by
+  simp [thinBP, hi]
+
+private lemma thinBP_k_bound' (i : Fin (thinBP F).depth) :
+    (i : ℕ) / Fintype.card α < Fintype.card β ^ Fintype.card α := by
+  apply Nat.div_lt_of_lt_mul
+  simpa only [thinBP_depth] using i.isLt
+
+private lemma thinBP_edge_inr' (i : Fin (thinBP F).depth) (hi : i.castSucc ≠ 0)
+    (x : α → β) (val : Fin (Fintype.card γ - 1))
+    (hs : cast (thinBP_nodes_eq' F i.castSucc hi) (evalLayer (thinBP F) i.castSucc x) =
+      ULift.up (Sum.inr val)) :
+    cast (thinBP_nodes_eq' F i.succ (Fin.succ_ne_zero i))
+      (evalLayer (thinBP F) i.succ x) = ULift.up (Sum.inr val) := by
+  have : (thinBP F).evalLayer i.succ x = (thinBP F).edges ((thinBP F).evalLayer i.castSucc x) _ :=
+    rfl
+  rcases i with ⟨_ | i, _⟩
+  · simp at hi
+  rw [cast_comm] at hs
+  rw [this, cast_comm, hs]
+  simp [thinBP]
+
+private lemma thinBP_edge_inl1_boundary' (i : Fin (thinBP F).depth) (hi : i.castSucc ≠ 0)
+    (x : α → β) (h_boundary : (i : ℕ) % Fintype.card α = Fintype.card α - 1)
+    (hs : cast (thinBP_nodes_eq' F i.castSucc hi) (evalLayer (thinBP F) i.castSucc x) =
+      ULift.up (Sum.inl 1)) :
+    cast (thinBP_nodes_eq' F i.succ (Fin.succ_ne_zero i))
+      (evalLayer (thinBP F) i.succ x) = ULift.up (Sum.inl 0) := by
+  have : (thinBP F).evalLayer i.succ x = (thinBP F).edges ((thinBP F).evalLayer i.castSucc x) _ :=
+    rfl
+  rcases i with ⟨_ | i, _⟩
+  · simp at hi
+  rw [cast_comm] at hs
+  rw [this, cast_comm, hs]
+  simp [thinBP, h_boundary]
+
+private lemma thinBP_edge_inl1_interior' (i : Fin (thinBP F).depth) (hi : i.castSucc ≠ 0)
+    (x : α → β) (h_not_boundary : (i : ℕ) % Fintype.card α ≠ Fintype.card α - 1)
+    (hs : cast (thinBP_nodes_eq' F i.castSucc hi) (evalLayer (thinBP F) i.castSucc x) =
+      ULift.up (Sum.inl 1)) :
+    cast (thinBP_nodes_eq' F i.succ (Fin.succ_ne_zero i))
+      (evalLayer (thinBP F) i.succ x) = ULift.up (Sum.inl 1) := by
+  have h_edge : (thinBP F).edges (evalLayer (thinBP F) i.castSucc x) (x ((Fintype.equivFin α).symm ⟨i.val % Fintype.card α, Nat.mod_lt _ Fintype.card_pos⟩)) = ULift.up (Sum.inl 1) := by
+    generalize_proofs at *
+    rcases i with ⟨_ | i, hi⟩
+    · simp at hi
+    · simp only [cast_eq, Fin.isValue] at hs
+      simp only [hs]
+      simp [thinBP, h_not_boundary]
+  rw [← h_edge, evalLayer_succ]
+  simp [thinBP]
+
+private lemma thinBP_edge_inl0_match_interior' (i : Fin (thinBP F).depth) (hi : i.castSucc ≠ 0)
+    (x : α → β) (h_not_boundary : (i : ℕ) % Fintype.card α ≠ Fintype.card α - 1)
+    (h_match : x ((Fintype.equivFin α).symm ⟨(i : ℕ) % Fintype.card α,
+        Nat.mod_lt i Fintype.card_pos⟩) =
+      thinBP_eab (α := α) (β := β) ⟨(i : ℕ) / Fintype.card α, thinBP_k_bound' F i⟩
+        ((Fintype.equivFin α).symm ⟨(i : ℕ) % Fintype.card α, Nat.mod_lt i Fintype.card_pos⟩))
+    (hs : cast (thinBP_nodes_eq' F i.castSucc hi) (evalLayer (thinBP F) i.castSucc x) =
+      ULift.up (Sum.inl 0)) :
+    cast (thinBP_nodes_eq' F i.succ (Fin.succ_ne_zero i))
+      (evalLayer (thinBP F) i.succ x) = ULift.up (Sum.inl 0) := by
+  rw [cast_comm] at hs
+  rw [evalLayer_succ, hs]
+  simp [thinBP, thinBP_eab] at h_match ⊢
+  grind
+
+private lemma thinBP_edge_inl0_nomatch_interior' (i : Fin (thinBP F).depth) (hi : i.castSucc ≠ 0)
+    (x : α → β) (h_not_boundary : (i : ℕ) % Fintype.card α ≠ Fintype.card α - 1)
+    (h_nomatch : x ((Fintype.equivFin α).symm ⟨(i : ℕ) % Fintype.card α,
+        Nat.mod_lt i Fintype.card_pos⟩) ≠
+      thinBP_eab (α := α) (β := β) ⟨(i : ℕ) / Fintype.card α, thinBP_k_bound' F i⟩
+        ((Fintype.equivFin α).symm ⟨(i : ℕ) % Fintype.card α, Nat.mod_lt i Fintype.card_pos⟩))
+    (hs : cast (thinBP_nodes_eq' F i.castSucc hi) (evalLayer (thinBP F) i.castSucc x) =
+      ULift.up (Sum.inl 0)) :
+    cast (thinBP_nodes_eq' F i.succ (Fin.succ_ne_zero i))
+      (evalLayer (thinBP F) i.succ x) = ULift.up (Sum.inl 1) := by
+  dsimp [thinBP] at hs ⊢
+  rw [LayeredBranchingProgram.evalLayer_succ]
+  grind
+
+private lemma thinBP_edge_inl0_nomatch_boundary' (i : Fin (thinBP F).depth) (hi : i.castSucc ≠ 0)
+    (x : α → β) (h_boundary : (i : ℕ) % Fintype.card α = Fintype.card α - 1)
+    (h_nomatch : x ((Fintype.equivFin α).symm ⟨(i : ℕ) % Fintype.card α,
+        Nat.mod_lt i Fintype.card_pos⟩) ≠
+      thinBP_eab (α := α) (β := β) ⟨(i : ℕ) / Fintype.card α, thinBP_k_bound' F i⟩
+        ((Fintype.equivFin α).symm ⟨(i : ℕ) % Fintype.card α, Nat.mod_lt i Fintype.card_pos⟩))
+    (hs : cast (thinBP_nodes_eq' F i.castSucc hi) (evalLayer (thinBP F) i.castSucc x) =
+      ULift.up (Sum.inl 0)) :
+    cast (thinBP_nodes_eq' F i.succ (Fin.succ_ne_zero i))
+      (evalLayer (thinBP F) i.succ x) = ULift.up (Sum.inl 0) := by
+  dsimp [thinBP] at hs ⊢
+  rw [LayeredBranchingProgram.evalLayer_succ]
+  grind
+
+private lemma thinBP_edge_inl0_match_boundary_gamma0' [NeZero (Fintype.card γ)] (i : Fin (thinBP F).depth) (hi : i.castSucc ≠ 0)
+    (x : α → β) (h_boundary : (i : ℕ) % Fintype.card α = Fintype.card α - 1)
+    (h_match : x ((Fintype.equivFin α).symm ⟨(i : ℕ) % Fintype.card α,
+        Nat.mod_lt i Fintype.card_pos⟩) =
+      thinBP_eab (α := α) (β := β) ⟨(i : ℕ) / Fintype.card α, thinBP_k_bound' F i⟩
+        ((Fintype.equivFin α).symm ⟨(i : ℕ) % Fintype.card α, Nat.mod_lt i Fintype.card_pos⟩))
+    (h_gamma0 : F (thinBP_eab ⟨(i : ℕ) / Fintype.card α, thinBP_k_bound' F i⟩) =
+      (Fintype.equivFin γ).symm 0)
+    (hs : cast (thinBP_nodes_eq' F i.castSucc hi) (evalLayer (thinBP F) i.castSucc x) =
+      ULift.up (Sum.inl 0)) :
+    cast (thinBP_nodes_eq' F i.succ (Fin.succ_ne_zero i))
+      (evalLayer (thinBP F) i.succ x) = ULift.up (Sum.inl 0) := by
+  dsimp [thinBP] at hs ⊢
+  rw [LayeredBranchingProgram.evalLayer_succ]
+  grind
+
+private lemma thinBP_edge_inl0_match_boundary_not_gamma0' [NeZero (Fintype.card γ)] (i : Fin (thinBP F).depth) (hi : i.castSucc ≠ 0)
+    (x : α → β) (h_boundary : (i : ℕ) % Fintype.card α = Fintype.card α - 1)
+    (h_match : x ((Fintype.equivFin α).symm ⟨(i : ℕ) % Fintype.card α,
+        Nat.mod_lt i Fintype.card_pos⟩) =
+      thinBP_eab (α := α) (β := β) ⟨(i : ℕ) / Fintype.card α, thinBP_k_bound' F i⟩
+        ((Fintype.equivFin α).symm ⟨(i : ℕ) % Fintype.card α, Nat.mod_lt i Fintype.card_pos⟩))
+    (h_not_gamma0 : F (thinBP_eab ⟨(i : ℕ) / Fintype.card α, thinBP_k_bound' F i⟩) ≠
+      (Fintype.equivFin γ).symm 0)
+    (hs : cast (thinBP_nodes_eq' F i.castSucc hi) (evalLayer (thinBP F) i.castSucc x) =
+      ULift.up (Sum.inl 0)) :
+    cast (thinBP_nodes_eq' F i.succ (Fin.succ_ne_zero i))
+      (evalLayer (thinBP F) i.succ x) =
+    ULift.up (Sum.inr ⟨((Fintype.equivFin γ)
+        (F (thinBP_eab ⟨(i : ℕ) / Fintype.card α, thinBP_k_bound' F i⟩))).val - 1, by
+        have h_ne : (Fintype.equivFin γ) (F (thinBP_eab ⟨(i : ℕ) / Fintype.card α,
+          thinBP_k_bound' F i⟩)) ≠ 0 := by
+          intro h_eq; apply h_not_gamma0; rw [← h_eq]; simp
+        have := ((Fintype.equivFin γ) (F (thinBP_eab ⟨(i : ℕ) / Fintype.card α,
+          thinBP_k_bound' F i⟩))).isLt
+        omega⟩) := by
+  dsimp [thinBP] at hs ⊢
+  rw [LayeredBranchingProgram.evalLayer_succ]
+  grind
+
 theorem thinBP_CorrectState_succ {n} (x : α → β) :
     thinBP_CorrectState F n x (evalLayer (thinBP F) n x) := by
   induction n using Fin.inductionOn
@@ -353,8 +498,217 @@ theorem thinBP_CorrectState_succ {n} (x : α → β) :
     rw [← Nat.add_one_le_iff] at ha h_cond2
     grw [← h_cond2, ← ha]
     norm_num
-  --Induction
-  sorry
+  have hn_val_ne : ¬(n.castSucc : Fin _).val = 0 := by
+    intro heq; apply h; ext; simpa using heq
+  unfold thinBP_CorrectState at ih ⊢
+  rw [dif_neg (show (n.succ : Fin _).val ≠ 0 from by simp)] at ⊢
+  rw [dif_neg hn_val_ne] at ih
+  set a := Fintype.card α
+  set b := Fintype.card β
+  set c := Fintype.card γ
+  haveI : NeZero c := ⟨(Fintype.card_pos_iff.mpr ⟨F (fun _ ↦ Classical.arbitrary β)⟩).ne'⟩
+  set k_old := (n : ℕ) / a
+  set pos_old := (n : ℕ) % a
+  set k_new := ((n : ℕ) + 1) / a
+  set pos_new := ((n : ℕ) + 1) % a
+  have hn_lt : (n : ℕ) < a * b ^ a := by
+    simpa only [thinBP_depth] using n.isLt
+  have hk_old_bound : k_old < b ^ a := Nat.div_lt_of_lt_mul hn_lt
+  -- Case split: boundary or not
+  have h_dam : a * k_old + pos_old = (n : ℕ) := by
+    have := Nat.div_add_mod (n : ℕ) a
+    omega
+  by_cases h_boundary : pos_old = a - 1
+  · -- Boundary case: k_new = k_old + 1, pos_new = 0
+    have h_eq : (n : ℕ) + 1 = a * (k_old + 1) := by
+      have _ := mul_add a k_old 1
+      omega
+    have hk_new : k_new = k_old + 1 := by
+      simp only [k_new]; rw [h_eq]; exact Nat.mul_div_cancel_left _ ha
+    have hpos_new : pos_new = 0 := by
+      simp only [pos_new]; rw [h_eq]
+      exact Nat.mul_mod_right a (k_old + 1)
+    clear h_eq
+    dsimp only at ih ⊢
+    split_ifs at ih with h_found h_k_lt h_match
+    · split_ifs with h
+      · convert thinBP_edge_inr' F n ( by aesop ) x ⟨ _, _ ⟩ ih using 1;
+      · simp [Nat.succ_div, *] at h
+        split_ifs at h
+        · exact absurd h (by linarith! [Nat.mod_add_div n a, Nat.sub_add_cancel ha])
+        · exact absurd h h_found.1.not_ge
+      · simp [Nat.succ_div, *] at h
+        split_ifs at h
+        · exact absurd h (by linarith! [Nat.mod_add_div n a, Nat.sub_add_cancel ha])
+        · · exact absurd h h_found.1.not_ge
+      · grind only
+    · -- Boundary, matching (.inl 0)
+      have hi' : n.castSucc ≠ (0 : Fin _) := by intro heq; apply h; exact Fin.ext (by simpa using Fin.ext_iff.mp heq)
+      have h_div_eq_b : ↑n.succ / Fintype.card α = k_old + 1 := by
+        simp only [Fin.val_succ]; exact hk_new
+      have h_mod_eq_zero_b : ↑n.succ % Fintype.card α = 0 := by
+        simp only [Fin.val_succ]; exact hpos_new
+      have h_pos_bound : ↑n.castSucc % Fintype.card α + 1 = Fintype.card α := by
+        show pos_old + 1 = a; omega
+      have h_pos_le : ↑n.castSucc % Fintype.card α + 1 ≤ Fintype.card α := le_of_eq h_pos_bound
+      by_cases h_sym : x ((Fintype.equivFin α).symm ⟨↑n % Fintype.card α, Nat.mod_lt _ Fintype.card_pos⟩) =
+        thinBP_eab (α := α) (β := β) ⟨↑n / Fintype.card α, thinBP_k_bound' F n⟩
+          ((Fintype.equivFin α).symm ⟨↑n % Fintype.card α, Nat.mod_lt _ Fintype.card_pos⟩)
+      · -- Last symbol matches → full string matches x = thinBP_eab k_old
+        have h_match_ext : thinBP_match ⟨↑n.castSucc / Fintype.card α, h_k_lt⟩ (↑n.castSucc % Fintype.card α + 1) h_pos_le x :=
+          (thinBP_match_succ _ _ _ x).mpr ⟨h_match, h_sym⟩
+        have h_full_match : thinBP_match ⟨k_old, hk_old_bound⟩ (Fintype.card α) (le_refl _) x :=
+          (thinBP_match_congr rfl h_pos_bound).mp h_match_ext
+        have h_idx_eq : thinBP_index x = ⟨k_old, hk_old_bound⟩ :=
+          (thinBP_match_card _ x).mp h_full_match
+        by_cases h_gamma0 : F (thinBP_eab ⟨↑n / Fintype.card α, thinBP_k_bound' F n⟩) =
+          (Fintype.equivFin γ).symm 0
+        · -- F output = γ0 → stay at .inl 0
+          have h_edge := thinBP_edge_inl0_match_boundary_gamma0' F n hi' x h_boundary h_sym h_gamma0 ih
+          have h_fx_eq : F x = (Fintype.equivFin γ).symm 0 := by
+            have hx : x = thinBP_eab ⟨k_old, hk_old_bound⟩ := by
+              rw [← Equiv.symm_apply_eq]; exact h_idx_eq
+            rw [hx]; exact h_gamma0
+          have h_not_found_new : ¬(↑(thinBP_index x) < ↑n.succ / Fintype.card α ∧ F x ≠ (Fintype.equivFin γ).symm 0) := by
+            push_neg; intro _; exact h_fx_eq
+          split_ifs with g1 g2 g3
+          · exact absurd g1 h_not_found_new
+          · exact h_edge
+          · exfalso; apply g3
+            intro j; exact absurd j.isLt (by have := h_mod_eq_zero_b; omega)
+          · exact h_edge
+        · -- F output ≠ γ0 → go to .inr
+          have h_edge := thinBP_edge_inl0_match_boundary_not_gamma0' F n hi' x h_boundary h_sym h_gamma0 ih
+          have h_found_new : ↑(thinBP_index x) < ↑n.succ / Fintype.card α ∧ F x ≠ (Fintype.equivFin γ).symm 0 := by
+            refine ⟨?_, ?_⟩
+            · rw [h_div_eq_b]; simp only [h_idx_eq, Fin.val_mk]; omega
+            · intro h_eq; apply h_gamma0
+              have hx : x = thinBP_eab ⟨k_old, hk_old_bound⟩ := by
+                rw [← Equiv.symm_apply_eq]; exact h_idx_eq
+              rw [← hx]; exact h_eq
+          have hx : x = thinBP_eab ⟨k_old, hk_old_bound⟩ := by
+            rw [← Equiv.symm_apply_eq]; exact h_idx_eq
+          split_ifs with g1
+          · have : F x = F (thinBP_eab ⟨↑n / Fintype.card α, thinBP_k_bound' F n⟩) := by rw [hx]
+            convert h_edge using 1; simp [this]
+          · exact absurd h_found_new g1
+      · -- Last symbol doesn't match → reset to .inl 0
+        have h_edge := thinBP_edge_inl0_nomatch_boundary' F n hi' x h_boundary h_sym ih
+        have h_no_full_match : ¬thinBP_match ⟨↑n.castSucc / Fintype.card α, h_k_lt⟩ (↑n.castSucc % Fintype.card α + 1) h_pos_le x := by
+          rw [thinBP_match_succ]; push_neg; intro _; exact h_sym
+        have h_idx_ne : (thinBP_index x : ℕ) ≠ k_old := by
+          intro h_eq; apply h_no_full_match
+          exact (thinBP_match_congr rfl h_pos_bound.symm).mp ((thinBP_match_card _ x).mpr (Fin.ext h_eq))
+        have h_not_found_new : ¬(↑(thinBP_index x) < ↑n.succ / Fintype.card α ∧ F x ≠ (Fintype.equivFin γ).symm 0) := by
+          push_neg at h_found ⊢; intro h_lt; rw [h_div_eq_b] at h_lt
+          exact h_found (show (↑(thinBP_index x) : ℕ) < k_old from by omega)
+        split_ifs with g1 g2 g3
+        · exact absurd g1 h_not_found_new
+        · exact h_edge
+        · exfalso; apply g3
+          intro j; exact absurd j.isLt (by have := h_mod_eq_zero_b; omega)
+        · exact h_edge
+    · -- Boundary, not matching (.inl 1) → reset to .inl 0
+      have hi' : n.castSucc ≠ (0 : Fin _) := by intro heq; apply h; exact Fin.ext (by simpa using Fin.ext_iff.mp heq)
+      have h_edge := thinBP_edge_inl1_boundary' F n hi' x h_boundary ih
+      have h_div_eq : ↑n.succ / Fintype.card α = k_old + 1 := by
+        simp only [Fin.val_succ]; exact hk_new
+      have h_mod_eq_zero : ↑n.succ % Fintype.card α = 0 := by
+        simp only [Fin.val_succ]; exact hpos_new
+      -- Show h_found stays false: if idx < k_old+1 and F x ≠ γ0, then idx < k_old (since idx ≠ k_old)
+      -- idx = k_old would mean full match, contradicting h_match
+      have h_idx_ne : (thinBP_index x : ℕ) ≠ k_old := by
+        intro h_eq
+        apply h_match
+        have h_full := (thinBP_match_card (α := α) (β := β) ⟨k_old, hk_old_bound⟩ x).mpr (Fin.ext h_eq)
+        exact fun j => h_full ⟨j.val, by have := j.isLt; have := Nat.mod_lt (↑n.castSucc) (Fintype.card_pos (α := α)); omega⟩
+      have h_not_found_new : ¬(↑(thinBP_index x) < ↑n.succ / Fintype.card α ∧ F x ≠ (Fintype.equivFin γ).symm 0) := by
+        push_neg at h_found ⊢
+        intro h_lt
+        rw [h_div_eq] at h_lt
+        have h_lt_old : (↑(thinBP_index x) : ℕ) < k_old := by omega
+        exact h_found h_lt_old
+      split_ifs with g1 g2 g3
+      · exact absurd g1 h_not_found_new
+      · exact h_edge
+      · exfalso; apply g3
+        intro j; exact absurd j.isLt (by have := h_mod_eq_zero; omega)
+      · exact h_edge
+    · exact absurd hk_old_bound h_k_lt
+  · have hpos_lt : pos_old + 1 < a := by
+      have := Nat.mod_lt (n : ℕ) ha; omega
+    have hk_new_eq : k_new = k_old := by
+      simp only [k_new]
+      have h_rewrite : (↑n + 1 : ℕ) = (↑n % a + 1) + a * (↑n / a) := by linarith [Nat.div_add_mod (↑n : ℕ) a]
+      conv_lhs => rw [h_rewrite]
+      rw [Nat.add_mul_div_left _ _ ha, Nat.div_eq_of_lt hpos_lt, Nat.zero_add]
+    have hpos_new_eq : pos_new = pos_old + 1 := by
+      simp only [pos_new]
+      have h_rewrite : (↑n + 1 : ℕ) = (↑n % a + 1) + a * (↑n / a) := by linarith [Nat.div_add_mod (↑n : ℕ) a]
+      conv_lhs => rw [h_rewrite]
+      rw [Nat.add_mul_mod_self_left]
+      exact Nat.mod_eq_of_lt hpos_lt
+    dsimp only at ih ⊢
+    split_ifs at ih with h_found h_k_lt h_match
+    -- Non-boundary found (.inr)
+    · have hi' : n.castSucc ≠ (0 : Fin _) := by intro heq; apply h; exact Fin.ext (by simpa using Fin.ext_iff.mp heq)
+      simp only [Fin.val_succ] at *
+      split_ifs with g1
+      · exact thinBP_edge_inr' F n hi' x ⟨_, _⟩ ih
+      all_goals (exfalso; apply g1; refine ⟨?_, h_found.2⟩; rw [show ((n : ℕ) + 1) / a = k_old from hk_new_eq]; exact h_found.1)
+    -- Non-boundary matching (.inl 0)
+    · have hi' : n.castSucc ≠ (0 : Fin _) := by intro heq; apply h; exact Fin.ext (by simpa using Fin.ext_iff.mp heq)
+      have h_div_eq : ↑n.succ / Fintype.card α = ↑n.castSucc / Fintype.card α := by
+        simp only [Fin.val_succ, Fin.val_castSucc]; exact hk_new_eq
+      have h_mod_eq : ↑n.succ % Fintype.card α = ↑n.castSucc % Fintype.card α + 1 := by
+        simp only [Fin.val_succ, Fin.val_castSucc]; exact hpos_new_eq
+      by_cases h_sym : x ((Fintype.equivFin α).symm ⟨↑n % Fintype.card α, Nat.mod_lt _ Fintype.card_pos⟩) =
+        thinBP_eab (α := α) (β := β) ⟨↑n / Fintype.card α, thinBP_k_bound' F n⟩
+          ((Fintype.equivFin α).symm ⟨↑n % Fintype.card α, Nat.mod_lt _ Fintype.card_pos⟩)
+      · -- Symbol matches → edge stays .inl 0, match extends to pos_old + 1
+        have h_edge := thinBP_edge_inl0_match_interior' F n hi' x h_boundary h_sym ih
+        have h_match_ext : thinBP_match ⟨↑n.castSucc / Fintype.card α, h_k_lt⟩ (↑n.castSucc % Fintype.card α + 1) (le_of_lt hpos_lt) x :=
+          (thinBP_match_succ _ _ _ x).mpr ⟨h_match, h_sym⟩
+        split_ifs with g1 g2 g3
+        · grind only
+        · exact h_edge
+        · exfalso
+          apply g3
+          exact (thinBP_match_congr (Fin.ext h_div_eq.symm) h_mod_eq.symm).mp h_match_ext
+        · grind only
+      · -- Symbol doesn't match → edge goes .inl 1, match fails at pos_old + 1
+        have h_edge := thinBP_edge_inl0_nomatch_interior' F n hi' x h_boundary h_sym ih
+        have h_match_fail : ¬thinBP_match ⟨↑n.castSucc / Fintype.card α, h_k_lt⟩ (↑n.castSucc % Fintype.card α + 1) (le_of_lt hpos_lt) x := by
+          rw [thinBP_match_succ]
+          push_neg
+          intro
+          exact h_sym
+        split_ifs with g1 g2 g3
+        · grind only
+        · exfalso; apply h_match_fail
+          exact (thinBP_match_congr (Fin.ext h_div_eq.symm) h_mod_eq.symm).mpr g3
+        · exact h_edge
+        · grind only
+    -- Non-boundary not matching (.inl 1)
+    · have hi' : n.castSucc ≠ (0 : Fin _) := by intro heq; apply h; exact Fin.ext (by simpa using Fin.ext_iff.mp heq)
+      have h_edge := thinBP_edge_inl1_interior' F n hi' x h_boundary ih
+      have h_div_eq : ↑n.succ / Fintype.card α = ↑n.castSucc / Fintype.card α := by
+        simp only [Fin.val_succ, Fin.coe_castSucc]; exact hk_new_eq
+      have h_mod_eq : ↑n.succ % Fintype.card α = ↑n.castSucc % Fintype.card α + 1 := by
+        simp only [Fin.val_succ, Fin.coe_castSucc]; exact hpos_new_eq
+      split_ifs with g1 g2 g3
+      · grind only
+      · exfalso
+        apply h_match
+        have hfin : (⟨↑n.castSucc / Fintype.card α, h_k_lt⟩ : Fin _) = ⟨↑n.succ / Fintype.card α, g2⟩ :=
+          Fin.ext h_div_eq.symm
+        rw [hfin]
+        have g3' : thinBP_match ⟨↑n.succ / Fintype.card α, g2⟩ (↑n.castSucc % Fintype.card α + 1) (le_of_lt hpos_lt) x :=
+          (thinBP_match_congr rfl h_mod_eq).mp g3
+        exact ((thinBP_match_succ _ _ _ x).mp g3').1
+      · exact h_edge
+      · grind only
+    · exact absurd hk_old_bound h_k_lt
 
 theorem thinBP_computes : (thinBP F).computes F := by
   intro x

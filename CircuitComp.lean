@@ -2,6 +2,7 @@
 -- Files are generally sorted by order in the import hierarchy.
 import CircuitComp.ForMathlib
 import CircuitComp.GrowthRate
+import CircuitComp.EssDomain
 import CircuitComp.FuncFamily
 import CircuitComp.Circuit
 import CircuitComp.NC
@@ -9,4 +10,5 @@ import CircuitComp.AC
 import CircuitComp.BranchingProgram.Basic
 import CircuitComp.BranchingProgram.Barrington
 import CircuitComp.BranchingProgram.CanonicalBP
+import CircuitComp.BranchingProgram.Oblivious
 import CircuitComp.BranchingProgram.ThinBP
