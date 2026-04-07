@@ -55,6 +55,36 @@ def computes [Mul G] [One G] (f : (α → Fin 2) → Fin 2) (σ : G) : Prop :=
   ∀ x, GP.eval x = if f x = 1 then σ else 1
 
 /--
+Acceptance semantics for a monoid/group program with an accepting subset `F`.
+-/
+def acceptsSet [Mul G] [One G] (F : Set G) (x : α → Fin 2) : Prop :=
+  GP.eval x ∈ F
+
+/--
+A family of monoid/group programs over inputs of length `n`.
+-/
+abbrev ProgramFamily (G : Type v) := (n : ℕ) → GroupProgram (Fin n) G
+
+namespace ProgramFamily
+
+variable {G : Type v} [Mul G] [One G] (PF : ProgramFamily G)
+
+/--
+`PF` recognizes `A` w.r.t. accepting set `F` if membership in `F` agrees with output bit `1`.
+-/
+def recognizes (F : Set G) (A : FuncFamily₁ (Fin 2)) : Prop :=
+  ∀ n x, (PF n).acceptsSet F x ↔ A n x = 1
+
+/--
+Polynomial-length condition for a monoid/group program family.
+-/
+def hasLength (f : GrowthRate) : Prop :=
+  (fun n ↦ (PF n).len) ∈ f
+
+end ProgramFamily
+
+
+/--
 The concatenation of two group programs, such that the evaluation of the
 concatenated program is the product of the evaluations (note the order due to function
 composition/multiplication convention).
@@ -185,6 +215,138 @@ def toBranchingProgram (σ : G) (γ : Type) [Zero γ] [DecidableEq γ] [SMul G �
       if u' = σ • 0 then 1 else 0
 
 /--
+The conversion from a Group Program to a Layered Branching Program with multiple accepting states.
+-/
+def toBranchingProgram' (γ : Type) (F : Set γ) [DecidablePred F] [One γ] [DecidableEq γ] [SMul G γ] [FaithfulSMul G γ] :
+    LayeredBranchingProgram α (Fin 2) (Fin 2) where
+  depth := GP.len
+  nodes := fun i ↦ if i.val = 0 then Fin 1 else γ
+  nodeVar := fun {k} _ ↦ GP.var k
+  edges := fun {k} u b ↦
+    if hk : k.val = 0 then
+      let p := if b = 1 then GP.perm1 k else GP.perm0 k
+      let dest : γ := p • (1 : γ)
+      dest
+    else
+      let p := if b = 1 then GP.perm1 k else GP.perm0 k
+      let u' : γ := cast (by simp [hk]) u
+      p • u'
+  startUnique := {
+    default := cast (by simp) (0 : Fin 1)
+    uniq := fun x ↦ Fin.eq_zero _
+  }
+  retVals := fun u ↦
+    if h : GP.len = 0 then
+      if F (1 : γ) then 1 else 0
+    else
+      let u' : γ := cast (by simp [h]) u
+      if F u' then 1 else 0
+
+/- Experimenting with length 0 -/
+namespace EmptyGP
+
+variable [Mul G] [One G] [Monoid α] (γ : Type) [DecidableEq γ] [Monoid γ] [SMul G γ] [FaithfulSMul G γ] (F : Set γ) [DecidablePred F]
+
+def empty_gp : GroupProgram α G where
+  len := 0
+  var := fun _ ↦ (1 : α)
+  perm0 := fun _ ↦ (1 : G)
+  perm1 := fun _ ↦ (1 : G)
+
+def P : LayeredBranchingProgram α (Fin 2) (Fin 2):= empty_gp (α := α) (G := G).toBranchingProgram' γ F
+open LayeredBranchingProgram
+
+#check P (α := α) (G := G) (γ := γ) (F := F).nodeVar
+
+#check (1 : G) • (1 : γ)
+
+end EmptyGP
+
+lemma toBranchingProgram'_nodes (γ : Type) [DecidableEq γ] [One γ] [SMul G γ] [FaithfulSMul G γ] (F : Set γ) [DecidablePred F] :
+    (GP.toBranchingProgram' γ F).nodes (Fin.last GP.len) = if GP.len = 0 then Fin 1 else γ := by
+  simp [toBranchingProgram']
+
+lemma toBranchingProgram'_nodes_len_ne_zero (γ : Type) [DecidableEq γ] [One γ] [SMul G γ] [FaithfulSMul G γ] (F : Set γ) [DecidablePred F] (hGP : GP.len ≠ 0) :
+    (GP.toBranchingProgram' γ F).nodes (Fin.last GP.len) = γ := by
+  simp [toBranchingProgram', hGP]
+
+lemma toBranchingProgram'_final [Monoid G] [One G] (hGP: GP.len ≠ 0) (γ : Type) (F : Set γ) [DecidablePred F] [One γ] [DecidableEq γ] [MulAction G γ] [FaithfulSMul G γ] (x : α → Fin 2):
+    (GP.toBranchingProgram' γ F).evalLayer (Fin.last (GP.toBranchingProgram' γ F).depth) x = cast (GP.toBranchingProgram'_nodes_len_ne_zero γ F hGP).symm ((GP.eval x) • (1 : γ)) := by
+  cases GP with
+  | mk len var perm0 perm1 =>
+    dsimp at hGP ⊢
+    cases len with
+    | zero =>
+      contradiction
+    | succ len =>
+      simp [LayeredBranchingProgram.evalLayer, GroupProgram.toBranchingProgram', GroupProgram.eval]
+
+lemma toBranchingProgram'_eval [Monoid G] (γ : Type) [One γ] [DecidableEq γ] [MulAction G γ] [FaithfulSMul G γ] (F : Set γ) [DecidablePred F] (x : α → Fin 2) :
+    (GP.toBranchingProgram' γ F).eval x = if
+     F ((GP.eval x) • (1 : γ)) then 1 else 0 := by
+  by_cases hGP : GP.len = 0
+  case pos =>
+    have : List.finRange GP.len = [] := by simp [hGP]
+    have h_eval : GP.eval x = 1 := by
+      simp [this, GroupProgram.eval]
+    simp [toBranchingProgram', LayeredBranchingProgram.eval, hGP, h_eval]
+  case neg =>
+    simp [LayeredBranchingProgram.eval]
+    rw [GP.toBranchingProgram'_final hGP γ F x]
+    simp [toBranchingProgram', hGP]
+
+open BPFamily
+
+lemma toBranchingProgram'_finite (M : Type) [Monoid M] [Fintype M] [DecidableEq M] (PF : ProgramFamily M) (F : Set M) [DecidablePred F] :
+    ((PF n).toBranchingProgram' M F).Finite := by
+  classical
+  refine ⟨?_⟩
+  intro i
+  by_cases h : i.val = 0
+  · simpa [GroupProgram.toBranchingProgram', h] using (inferInstance : Finite (Fin 1))
+  · simpa [GroupProgram.toBranchingProgram', h] using (inferInstance : Finite M)
+
+lemma toBranchingProgram_computes (M : Type) [Monoid M] [Fintype M] [DecidableEq M]
+    (PF : ProgramFamily M) (F : Set M) [DecidablePred F]
+    (A : FuncFamily₁ (Fin 2)) (hrec : PF.recognizes F A) :
+    ((PF n).toBranchingProgram' M F).computes (A n) := by
+  classical
+  sorry
+
+/--
+There is a polynomial-size bounded-width BP family for `A`
+iff there is a monoid program family and accepting subset `F` recognizing `A`.
+-/
+
+lemma exists_boundedWidthBP_poly_iff_exists_monoidProgram
+    (A : FuncFamily₁ (Fin 2)) :
+    (∃ w : ℕ,
+      ∃ BPF : BPFamily (Fin 2), BPF.Finite ∧
+        BPF.computes A ∧ BPF.hasWidth (· ≤ w) ∧ BPF.hasSize .poly) ↔
+    (∃ (M : Type) (_ : Monoid M) (_ : Fintype M) (F : Set M) (PF : ProgramFamily M),
+      PF.hasLength .poly ∧ PF.recognizes F A) := by
+  constructor
+  · rintro ⟨w, BPF, hfin, hcomp, hw, hsize⟩
+    sorry
+  . rintro ⟨M, _, _, F, PF, hlen, hrec⟩
+    classical
+    let P' := fun n => (PF n).toBranchingProgram' M F
+    use Fintype.card M
+    use P'
+    constructor
+    · classical
+      refine ⟨?_⟩
+      intro n
+      simpa using toBranchingProgram'_finite M PF F
+    . constructor
+      · intro n
+        simp [ProgramFamily.recognizes, GroupProgram.acceptsSet] at hrec
+        sorry
+      . constructor
+        · intro n
+          sorry
+        · sorry
+/--
 The width of the converted branching program is bounded by the cardinality of the target type.
 When `G` is `Equiv.Perm (Fin 5)` and `γ` is `Fin 5`, this is at most 5.
 -/
@@ -242,7 +404,8 @@ def negate [Group G] (i : α) (σ : G) : GroupProgram α G :=
 
 /-
 The length of the negated program is the length of the original program plus 1.
--/
+-/5.00 PM - 5.30 PM
+
 theorem len_negate [Group G] (i : α) (σ : G) :
     (GP.negate i σ).len = GP.len + 1 := by
   unfold negate
