@@ -475,7 +475,7 @@ def negate [Group G] (i : α) (σ : G) : GroupProgram α G :=
 
 /-
 The length of the negated program is the length of the original program plus 1.
--/5.00 PM - 5.30 PM
+-/
 
 theorem len_negate [Group G] (i : α) (σ : G) :
     (GP.negate i σ).len = GP.len + 1 := by
