@@ -48,6 +48,31 @@ def eval [Mul G] [One G] (x : α → Fin 2) : G :=
     let p := if x (GP.var i) = 1 then GP.perm1 i else GP.perm0 i
     p * acc) (1 : G)
 
+def evalLayer [Mul G] [One G] (n : Fin (GP.len + 1)) (x : α → Fin 2) : G :=
+  if h : n = 0 then
+    1
+  else
+    let n' := Fin.pred n h
+    let p := if x (GP.var n') = 1 then GP.perm1 n' else GP.perm0 n'
+    p * evalLayer n'.castSucc x
+  termination_by n
+  decreasing_by
+  exact Fin.castSucc_pred_lt h
+
+def evalLayer' [Mul G] [One G] (n : Fin (GP.len + 1)) (x : )
+
+def evalLayer_last_eq_eval [Mul G] [One G] (x : α → Fin 2) :
+    GP.evalLayer (Fin.last GP.len) x = GP.eval x := by
+  unfold eval evalLayer
+  cases GP with
+  | mk len var perm0 perm1 =>
+    induction len with
+    | zero =>
+      simp
+    | succ n ih =>
+      simp [List.finRange_succ, List.foldl_cons, Fin.isValue]
+      sorry
+
 /-- A group program `computes` a binary function f if the `GroupProgam.eval` gives
 a `σ ^ (f x)`. -/
 def computes [Mul G] [One G] (f : (α → Fin 2) → Fin 2) (σ : G) : Prop :=
@@ -261,7 +286,17 @@ open LayeredBranchingProgram
 
 end EmptyGP
 
-lemma toBranchingProgram'_nodes (γ : Type) [DecidableEq γ] [One γ] [SMul G γ] [FaithfulSMul G γ] (F : Set γ) [DecidablePred F] :
+lemma toBranchingProgram'_nodes (n : Fin (GP.len + 1)) (γ : Type) [DecidableEq γ] [One γ] [SMul G γ] [FaithfulSMul G γ] (F : Set γ) [DecidablePred F] :
+    (GP.toBranchingProgram' γ F).nodes n = if n.val = 0 then Fin 1 else γ := by
+  simp [toBranchingProgram']
+
+lemma toBranchingProgram'_nodes_ne_zero (n : Fin (GP.len + 1)) (h : n ≠ 0) (γ : Type) [DecidableEq γ] [One γ] [SMul G γ] [FaithfulSMul G γ] (F : Set γ) [DecidablePred F] :
+    (GP.toBranchingProgram' γ F).nodes n = γ := by
+  simp [toBranchingProgram', h]
+
+/-The last layer of the BP is Fin 1 if the group program has length 0, otherwise it is γ-/
+
+lemma toBranchingProgram'_nodesLast (γ : Type) [DecidableEq γ] [One γ] [SMul G γ] [FaithfulSMul G γ] (F : Set γ) [DecidablePred F] :
     (GP.toBranchingProgram' γ F).nodes (Fin.last GP.len) = if GP.len = 0 then Fin 1 else γ := by
   simp [toBranchingProgram']
 
@@ -269,6 +304,37 @@ lemma toBranchingProgram'_nodes_len_ne_zero (γ : Type) [DecidableEq γ] [One γ
     (GP.toBranchingProgram' γ F).nodes (Fin.last GP.len) = γ := by
   simp [toBranchingProgram', hGP]
 
+lemma toBranchingProgram'_evalLayer [Monoid G] (h : GP.len ≠ 0) (γ : Type) [DecidableEq γ] [One γ] [MulAction G γ] [FaithfulSMul G γ] (F : Set γ) [DecidablePred F] (x : α → Fin 2) :
+    ∀ n : Fin GP.len, cast (GP.toBranchingProgram'_nodes_ne_zero n.succ (Fin.succ_ne_zero n) γ F) ((GP.toBranchingProgram' γ F).evalLayer (n.succ) x) = (GP.evalLayer n.succ x) • (1 : γ) := by
+  have h1 : ∃ m, GP.len = m + 1 := by
+    cases GP with
+    | mk len var perm0 perm1 =>
+      cases len with
+      | zero =>
+        contradiction
+      | succ m =>
+        use m
+  rcases h1 with ⟨m, hm⟩
+  have h2 : GP.len = (GP.toBranchingProgram' γ F).depth := by
+    simp [toBranchingProgram']
+  cases GP with
+  | mk len var perm0 perm1 =>
+    intro n
+    subst hm
+    induction n using Fin.induction with
+    | zero =>
+      rw [LayeredBranchingProgram.evalLayer_succ]
+      simp [toBranchingProgram', LayeredBranchingProgram.evalLayer, GroupProgram.evalLayer]
+    | succ n' ih =>
+      rw [LayeredBranchingProgram.evalLayer_succ]
+      simp only [Fin.castSucc_succ]
+      simp [cast] at ih
+      simp [ih]
+      simp [toBranchingProgram']
+      conv_rhs => rw [GroupProgram.evalLayer]; simp
+      simp [mul_smul]
+
+/-The Last layer is evaluated to (GP.eval x) . (1 : γ)-/
 lemma toBranchingProgram'_final [Monoid G] [One G] (hGP: GP.len ≠ 0) (γ : Type) (F : Set γ) [DecidablePred F] [One γ] [DecidableEq γ] [MulAction G γ] [FaithfulSMul G γ] (x : α → Fin 2):
     (GP.toBranchingProgram' γ F).evalLayer (Fin.last (GP.toBranchingProgram' γ F).depth) x = cast (GP.toBranchingProgram'_nodes_len_ne_zero γ F hGP).symm ((GP.eval x) • (1 : γ)) := by
   cases GP with
@@ -277,8 +343,14 @@ lemma toBranchingProgram'_final [Monoid G] [One G] (hGP: GP.len ≠ 0) (γ : Typ
     cases len with
     | zero =>
       contradiction
-    | succ len =>
+    | succ l =>
       simp [LayeredBranchingProgram.evalLayer, GroupProgram.toBranchingProgram', GroupProgram.eval]
+      induction l with
+      | zero =>
+        simp [List.finRange_succ, List.foldl_nil, List.foldl_cons, Fin.isValue]
+        split_ifs <;> simp [cast]
+      | succ a ih =>
+        sorry
 
 lemma toBranchingProgram'_eval [Monoid G] (γ : Type) [One γ] [DecidableEq γ] [MulAction G γ] [FaithfulSMul G γ] (F : Set γ) [DecidablePred F] (x : α → Fin 2) :
     (GP.toBranchingProgram' γ F).eval x = if
