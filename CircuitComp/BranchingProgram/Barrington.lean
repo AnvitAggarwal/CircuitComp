@@ -59,19 +59,62 @@ def evalLayer [Mul G] [One G] (n : Fin (GP.len + 1)) (x : α → Fin 2) : G :=
   decreasing_by
   exact Fin.castSucc_pred_lt h
 
-def evalLayer' [Mul G] [One G] (n : Fin (GP.len + 1)) (x : )
+lemma evalLayer_succ [Mul G] [One G] (n : Fin GP.len) (x : α → Fin 2) :
+    GP.evalLayer n.succ x = (if x (GP.var n) = 1 then GP.perm1 n else GP.perm0 n) * GP.evalLayer n.castSucc x := by
+  rw [evalLayer]
+  split_ifs with h1 h2 h3
+  . contrapose! h1
+    exact Fin.succ_ne_zero n
+  . contrapose! h1
+    exact Fin.succ_ne_zero n
+  . rw [Fin.pred_succ n]
+    simp
+    intro h4
+    contradiction
+  . rw [Fin.pred_succ n]
+    simp
+    intro h4
+    contradiction
 
-def evalLayer_last_eq_eval [Mul G] [One G] (x : α → Fin 2) :
-    GP.evalLayer (Fin.last GP.len) x = GP.eval x := by
-  unfold eval evalLayer
+def evalLayer' [Mul G] [One G] (n : Fin (GP.len + 1)) (x : α → Fin 2) : G :=
+  (List.finRange n.val).foldl (fun acc (i : Fin n) =>
+    let h : i.val < GP.len := by
+      apply Fin.val_lt_of_le
+      apply Nat.le_of_lt_succ
+      apply Fin.val_lt_of_le
+      rw [Nat.succ_eq_add_one]
+    let i' : Fin (GP.len) := Fin.castLT i h
+    let p := if x (GP.var i') = 1 then GP.perm1 i' else GP.perm0 i'
+    p * acc) (1 : G)
+
+lemma evalLayer'_succ [Mul G] [One G] (n : Fin GP.len) (x : α → Fin 2) :
+    GP.evalLayer' n.succ x = (if x (GP.var n) = 1 then GP.perm1 n else GP.perm0 n) * GP.evalLayer' n.castSucc x := by
+  simp [evalLayer']
+  conv_lhs => simp [List.finRange_succ_last]
+  simp [Fin.castLT]
+  simp [List.foldl_map]
+
+lemma evalLayer_eq_evalLayer' [Mul G] [One G] (n : Fin (GP.len + 1)) (x : α → Fin 2) :
+    GP.evalLayer n x = GP.evalLayer' n x := by
+  -- unfold evalLayer evalLayer'
   cases GP with
   | mk len var perm0 perm1 =>
-    induction len with
+    induction n using Fin.induction with
     | zero =>
+      unfold evalLayer evalLayer'
       simp
     | succ n ih =>
-      simp [List.finRange_succ, List.foldl_cons, Fin.isValue]
-      sorry
+      rw [evalLayer_succ, evalLayer'_succ]
+      simp [ih]
+
+lemma evalLayer'_last_eq_eval [Mul G] [One G] (x : α → Fin 2) :
+    GP.evalLayer' (Fin.last GP.len) x = GP.eval x := by
+  unfold eval evalLayer'
+  simp [Fin.castLT]
+
+lemma evalLayer_last_eq_eval [Mul G] [One G] (x : α → Fin 2) :
+    GP.evalLayer (Fin.last GP.len) x = GP.eval x := by
+  rw [evalLayer_eq_evalLayer', evalLayer'_last_eq_eval]
 
 /-- A group program `computes` a binary function f if the `GroupProgam.eval` gives
 a `σ ^ (f x)`. -/
@@ -82,7 +125,7 @@ def computes [Mul G] [One G] (f : (α → Fin 2) → Fin 2) (σ : G) : Prop :=
 Acceptance semantics for a monoid/group program with an accepting subset `F`.
 -/
 def acceptsSet [Mul G] [One G] (F : Set G) (x : α → Fin 2) : Prop :=
-  GP.eval x ∈ F
+  F (GP.eval x)
 
 /--
 A family of monoid/group programs over inputs of length `n`.
@@ -302,7 +345,11 @@ lemma toBranchingProgram'_nodesLast (γ : Type) [DecidableEq γ] [One γ] [SMul 
 
 lemma toBranchingProgram'_nodes_len_ne_zero (γ : Type) [DecidableEq γ] [One γ] [SMul G γ] [FaithfulSMul G γ] (F : Set γ) [DecidablePred F] (hGP : GP.len ≠ 0) :
     (GP.toBranchingProgram' γ F).nodes (Fin.last GP.len) = γ := by
-  simp [toBranchingProgram', hGP]
+  rw [GP.toBranchingProgram'_nodes_ne_zero]
+  intro h
+  have := congrArg Fin.val h
+  simp [Fin.last] at this
+  contradiction
 
 lemma toBranchingProgram'_evalLayer [Monoid G] (h : GP.len ≠ 0) (γ : Type) [DecidableEq γ] [One γ] [MulAction G γ] [FaithfulSMul G γ] (F : Set γ) [DecidablePred F] (x : α → Fin 2) :
     ∀ n : Fin GP.len, cast (GP.toBranchingProgram'_nodes_ne_zero n.succ (Fin.succ_ne_zero n) γ F) ((GP.toBranchingProgram' γ F).evalLayer (n.succ) x) = (GP.evalLayer n.succ x) • (1 : γ) := by
@@ -334,23 +381,25 @@ lemma toBranchingProgram'_evalLayer [Monoid G] (h : GP.len ≠ 0) (γ : Type) [D
       conv_rhs => rw [GroupProgram.evalLayer]; simp
       simp [mul_smul]
 
-/-The Last layer is evaluated to (GP.eval x) . (1 : γ)-/
-lemma toBranchingProgram'_final [Monoid G] [One G] (hGP: GP.len ≠ 0) (γ : Type) (F : Set γ) [DecidablePred F] [One γ] [DecidableEq γ] [MulAction G γ] [FaithfulSMul G γ] (x : α → Fin 2):
-    (GP.toBranchingProgram' γ F).evalLayer (Fin.last (GP.toBranchingProgram' γ F).depth) x = cast (GP.toBranchingProgram'_nodes_len_ne_zero γ F hGP).symm ((GP.eval x) • (1 : γ)) := by
-  cases GP with
-  | mk len var perm0 perm1 =>
-    dsimp at hGP ⊢
-    cases len with
-    | zero =>
-      contradiction
-    | succ l =>
-      simp [LayeredBranchingProgram.evalLayer, GroupProgram.toBranchingProgram', GroupProgram.eval]
-      induction l with
-      | zero =>
-        simp [List.finRange_succ, List.foldl_nil, List.foldl_cons, Fin.isValue]
-        split_ifs <;> simp [cast]
-      | succ a ih =>
-        sorry
+lemma last_ne_zero (h : GP.len ≠ 0) : Fin.last GP.len ≠ 0 := by
+  contrapose! h
+  rw [Fin.last_eq_zero_iff.mp h]
+
+def pred_last (h : GP.len ≠ 0) := Fin.pred (Fin.last GP.len) (GP.last_ne_zero h)
+
+lemma toBranchingProgram'_evalLayer_last [Monoid G] (h : GP.len ≠ 0) (γ : Type) [DecidableEq γ] [One γ] [MulAction G γ] [FaithfulSMul G γ] (F : Set γ) [DecidablePred F] (x : α → Fin 2) :
+    cast (GP.toBranchingProgram'_nodes_len_ne_zero γ F h) ((GP.toBranchingProgram' γ F).evalLayer (Fin.last (GP.len)) x) =
+    cast (GP.toBranchingProgram'_nodes_ne_zero (GP.pred_last h).succ (Fin.succ_ne_zero (GP.pred_last h)) γ F) ((GP.toBranchingProgram' γ F).evalLayer ((GP.pred_last h).succ) x):= by
+  simp [pred_last]
+  grind
+
+lemma toBranchingProgram'_final [Monoid G] (hGP: GP.len ≠ 0) (γ : Type) [One γ] [DecidableEq γ] [MulAction G γ] [FaithfulSMul G γ] (F : Set γ) [DecidablePred F] (x : α → Fin 2):
+      cast (GP.toBranchingProgram'_nodes_len_ne_zero γ F hGP) ((GP.toBranchingProgram' γ F).evalLayer (Fin.last (GP.len)) x) = (GP.eval x) • (1 : γ) := by
+  rw [GP.toBranchingProgram'_evalLayer_last hGP]
+  rw [← GP.evalLayer_last_eq_eval]
+  have h : Fin.last GP.len = (GP.pred_last hGP).succ := by
+    simp [pred_last]
+  rw [h, GP.toBranchingProgram'_evalLayer hGP]
 
 lemma toBranchingProgram'_eval [Monoid G] (γ : Type) [One γ] [DecidableEq γ] [MulAction G γ] [FaithfulSMul G γ] (F : Set γ) [DecidablePred F] (x : α → Fin 2) :
     (GP.toBranchingProgram' γ F).eval x = if
@@ -362,8 +411,10 @@ lemma toBranchingProgram'_eval [Monoid G] (γ : Type) [One γ] [DecidableEq γ] 
       simp [this, GroupProgram.eval]
     simp [toBranchingProgram', LayeredBranchingProgram.eval, hGP, h_eval]
   case neg =>
-    simp [LayeredBranchingProgram.eval]
-    rw [GP.toBranchingProgram'_final hGP γ F x]
+    rw [LayeredBranchingProgram.eval]
+    have h1 : (GP.toBranchingProgram' γ F).depth = GP.len := by
+      simp [toBranchingProgram']
+    rw [← GP.toBranchingProgram'_final hGP γ F x]
     simp [toBranchingProgram', hGP]
 
 open BPFamily
@@ -379,11 +430,19 @@ lemma toBranchingProgram'_finite (M : Type) [Monoid M] [Fintype M] [DecidableEq 
 
 lemma toBranchingProgram_computes (M : Type) [Monoid M] [Fintype M] [DecidableEq M]
     (PF : ProgramFamily M) (F : Set M) [DecidablePred F]
-    (A : FuncFamily₁ (Fin 2)) (hrec : PF.recognizes F A) :
+    (A : FuncFamily₁ (Fin 2)) (hrec : PF.recognizes F A) (n : ℕ):
     ((PF n).toBranchingProgram' M F).computes (A n) := by
-  classical
-  sorry
-
+  intro x
+  rw [GroupProgram.toBranchingProgram'_eval]
+  simp [ProgramFamily.recognizes, GroupProgram.acceptsSet] at hrec
+  split_ifs with h
+  . simp [mul_one] at h
+    exact ((hrec n x).mp h).symm
+  . simp [mul_one] at h
+    contrapose! h
+    symm at h
+    apply Fin.eq_one_of_ne_zero at h
+    exact (hrec n x).mpr h
 /--
 There is a polynomial-size bounded-width BP family for `A`
 iff there is a monoid program family and accepting subset `F` recognizing `A`.
@@ -411,8 +470,8 @@ lemma exists_boundedWidthBP_poly_iff_exists_monoidProgram
       simpa using toBranchingProgram'_finite M PF F
     . constructor
       · intro n
-        simp [ProgramFamily.recognizes, GroupProgram.acceptsSet] at hrec
-        sorry
+        unfold P'
+        rw [funext (toBranchingProgram_computes M PF F A hrec n)]
       . constructor
         · intro n
           sorry
